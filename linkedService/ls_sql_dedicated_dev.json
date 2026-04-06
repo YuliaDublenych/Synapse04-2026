@@ -1,0 +1,19 @@
+{
+	"name": "ls_sql_dedicated_dev",
+	"type": "Microsoft.Synapse/workspaces/linkedservices",
+	"properties": {
+		"annotations": [],
+		"type": "AzureSqlDW",
+		"typeProperties": {
+			"server": "synw-ohcwm-dev.sql.azuresynapse.net",
+			"database": "dsqlp_dev02",
+			"encrypt": "mandatory",
+			"trustServerCertificate": false,
+			"authenticationType": "SystemAssignedManagedIdentity"
+		},
+		"connectVia": {
+			"referenceName": "AutoResolveIntegrationRuntime",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}

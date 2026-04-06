@@ -1,0 +1,20 @@
+{
+	"name": "sp_silver",
+	"properties": {
+		"folder": {
+			"name": "test"
+		},
+		"content": {
+			"query": "IF OBJECT_ID('silver.sp_load_customers', 'P') IS NOT NULL\n    DROP PROCEDURE silver.sp_load_customers;\nGO\n\nCREATE PROCEDURE silver.sp_load_customers\nAS\nBEGIN\n    TRUNCATE TABLE silver.customers;\n\n    INSERT INTO silver.customers\n    (\n        customer_id,\n        customer_name,\n        city,\n        signup_date\n    )\n    SELECT\n        TRY_CAST(LTRIM(RTRIM(customer_id)) AS INT),\n        LTRIM(RTRIM(customer_name)),\n        NULLIF(LTRIM(RTRIM(city)), ''),\n        TRY_CAST(LTRIM(RTRIM(signup_date)) AS DATE)\n    FROM bronze.customers\n    WHERE TRY_CAST(LTRIM(RTRIM(customer_id)) AS INT) IS NOT NULL;\nEND;\nGO\n\nIF OBJECT_ID('silver.sp_load_products', 'P') IS NOT NULL\n    DROP PROCEDURE silver.sp_load_products;\nGO\n\nCREATE PROCEDURE silver.sp_load_products\nAS\nBEGIN\n    TRUNCATE TABLE silver.products;\n\n    INSERT INTO silver.products\n    (\n        product_id,\n        product_name,\n        category,\n        unit_price\n    )\n    SELECT\n        TRY_CAST(LTRIM(RTRIM(product_id)) AS INT),\n        LTRIM(RTRIM(product_name)),\n        NULLIF(LTRIM(RTRIM(category)), ''),\n        TRY_CAST(LTRIM(RTRIM(unit_price)) AS DECIMAL(18,2))\n    FROM bronze.products\n    WHERE TRY_CAST(LTRIM(RTRIM(product_id)) AS INT) IS NOT NULL;\nEND;\nGO\n\nIF OBJECT_ID('silver.sp_load_orders', 'P') IS NOT NULL\n    DROP PROCEDURE silver.sp_load_orders;\nGO\n\nCREATE PROCEDURE silver.sp_load_orders\nAS\nBEGIN\n    TRUNCATE TABLE silver.orders;\n\n    INSERT INTO silver.orders\n    (\n        order_id,\n        customer_id,\n        product_id,\n        quantity,\n        order_date\n    )\n    SELECT\n        TRY_CAST(LTRIM(RTRIM(order_id)) AS INT),\n        TRY_CAST(LTRIM(RTRIM(customer_id)) AS INT),\n        TRY_CAST(LTRIM(RTRIM(product_id)) AS INT),\n        TRY_CAST(LTRIM(RTRIM(quantity)) AS INT),\n        TRY_CAST(LTRIM(RTRIM(order_date)) AS DATE)\n    FROM bronze.orders\n    WHERE TRY_CAST(LTRIM(RTRIM(order_id)) AS INT) IS NOT NULL;\nEND;\nGO\n\n\nIF OBJECT_ID('silver.usp_exec', 'P') IS NOT NULL\n    DROP PROCEDURE silver.usp_exec;\nGO\n\nCREATE PROCEDURE silver.usp_exec\n    @load_run_id NVARCHAR(100),\n    @procname NVARCHAR(256)\nAS\nBEGIN\n    SET NOCOUNT ON;\n\n    DECLARE @sql NVARCHAR(MAX);\n\n    IF @procname IS NULL OR LTRIM(RTRIM(@procname)) = ''\n    BEGIN\n        THROW 50001, 'procname is required', 1;\n    END;\n\n    SET @sql = N'EXEC ' + @procname;\n\n    EXEC sp_executesql @sql;\nEND;\nGO",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "dsqlp_dev02",
+				"poolName": "dsqlp_dev02"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}

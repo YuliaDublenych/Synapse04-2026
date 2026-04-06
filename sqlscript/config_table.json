@@ -1,0 +1,20 @@
+{
+	"name": "config_table",
+	"properties": {
+		"folder": {
+			"name": "test"
+		},
+		"content": {
+			"query": "/*============================================================\n  Ensure schema exists\n============================================================*/\nIF NOT EXISTS (\n    SELECT 1\n    FROM sys.schemas\n    WHERE name = 'config'\n)\nBEGIN\n    EXEC ('CREATE SCHEMA config');\nEND;\nGO\n\n/*============================================================\n  Recreate table\n============================================================*/\nIF OBJECT_ID('config.IngestionConfig', 'U') IS NOT NULL\nBEGIN\n    DROP TABLE config.IngestionConfig;\nEND;\nGO\n\n/*============================================================\n  Create table\n============================================================*/\nCREATE TABLE config.IngestionConfig\n(\n    ConfigId         INT IDENTITY(1,1) NOT NULL,\n    IsActive         BIT NOT NULL\n        CONSTRAINT DF_IngestionConfig_IsActive DEFAULT (1),\n\n    SourceContainer  VARCHAR(128) NOT NULL,\n    SourceDirectory  VARCHAR(512) NOT NULL,\n    FileName         VARCHAR(512) NOT NULL,\n\n    TargetSchema     VARCHAR(128) NOT NULL,\n    TargetTable      VARCHAR(128) NOT NULL,\n\n    SilverProcName   VARCHAR(256) NULL,\n    EnableSilver     BIT NOT NULL\n        CONSTRAINT DF_IngestionConfig_EnableSilver DEFAULT (1)\n)\nWITH\n(\n    DISTRIBUTION = ROUND_ROBIN,\n    HEAP\n);\nGO\n\n/*============================================================\n  Load config rows\n============================================================*/\nTRUNCATE TABLE config.IngestionConfig;\nGO\n\nINSERT INTO config.IngestionConfig\n(\n    SourceContainer,\n    SourceDirectory,\n    FileName,\n    TargetSchema,\n    TargetTable,\n    SilverProcName,\n    EnableSilver\n)\nSELECT 'test', 'source', 'customers.csv', 'bronze', 'customers', 'silver.sp_load_customers', 1\nUNION ALL\nSELECT 'test', 'source', 'products.csv',  'bronze', 'products',  'silver.sp_load_products', 1\nUNION ALL\nSELECT 'test', 'source', 'orders.csv',    'bronze', 'orders',    'silver.sp_load_orders', 1;\nGO\n\n/*============================================================\n  Check config\n============================================================*/\nSELECT *\nFROM config.IngestionConfig;\nGO",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "dsqlp_dev02",
+				"poolName": "dsqlp_dev02"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}

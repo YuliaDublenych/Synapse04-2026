@@ -1,0 +1,141 @@
+{
+	"name": "PL_Copy_To_Bronze_copy1",
+	"properties": {
+		"activities": [
+			{
+				"name": "Copy_to_bronze",
+				"type": "Copy",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "DelimitedTextSource",
+						"additionalColumns": [
+							{
+								"name": "filename",
+								"value": "FILENAME"
+							},
+							{
+								"name": "etlrunid",
+								"value": "id_001"
+							},
+							{
+								"name": "createdate",
+								"value": {
+									"value": "@utcNow()",
+									"type": "Expression"
+								}
+							}
+						],
+						"storeSettings": {
+							"type": "AzureBlobFSReadSettings",
+							"recursive": true,
+							"enablePartitionDiscovery": false
+						},
+						"formatSettings": {
+							"type": "DelimitedTextReadSettings"
+						}
+					},
+					"sink": {
+						"type": "SqlDWSink",
+						"preCopyScript": {
+							"value": "@concat('TRUNCATE TABLE ', pipeline().parameters.p_TargetSchema, '.', pipeline().parameters.p_TargetTable)",
+							"type": "Expression"
+						},
+						"allowCopyCommand": true,
+						"disableMetricsCollection": false
+					},
+					"enableStaging": true,
+					"stagingSettings": {
+						"linkedServiceName": {
+							"referenceName": "ls_adls_source",
+							"type": "LinkedServiceReference"
+						},
+						"path": "test/staging"
+					},
+					"enableSkipIncompatibleRow": true,
+					"logSettings": {
+						"enableCopyActivityLog": true,
+						"copyActivityLogSettings": {
+							"logLevel": "Warning",
+							"enableReliableLogging": false
+						},
+						"logLocationSettings": {
+							"linkedServiceName": {
+								"referenceName": "ls_adls_source",
+								"type": "LinkedServiceReference"
+							},
+							"path": "test/errors"
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "DS_ADLS_CSV_Param",
+						"type": "DatasetReference",
+						"parameters": {
+							"pContainer": {
+								"value": "@pipeline().parameters.p_SourceContainer",
+								"type": "Expression"
+							},
+							"pDirectory": {
+								"value": "@pipeline().parameters.p_SourceDirectory",
+								"type": "Expression"
+							},
+							"pFileName": {
+								"value": "@pipeline().parameters.p_FileName",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "DS_DedSQLpool_Table_Param",
+						"type": "DatasetReference",
+						"parameters": {
+							"pSchema": {
+								"value": "@pipeline().parameters.p_TargetSchema",
+								"type": "Expression"
+							},
+							"pTable": {
+								"value": "@pipeline().parameters.p_TargetTable",
+								"type": "Expression"
+							}
+						}
+					}
+				]
+			}
+		],
+		"parameters": {
+			"p_SourceContainer": {
+				"type": "string"
+			},
+			"p_SourceDirectory": {
+				"type": "string"
+			},
+			"p_FileName": {
+				"type": "string"
+			},
+			"p_TargetSchema": {
+				"type": "string"
+			},
+			"p_TargetTable": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "test"
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-04-05T23:09:16Z"
+	},
+	"type": "Microsoft.Synapse/workspaces/pipelines"
+}

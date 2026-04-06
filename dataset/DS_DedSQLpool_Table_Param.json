@@ -1,0 +1,31 @@
+{
+	"name": "DS_DedSQLpool_Table_Param",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "ls_sql_dedicated_dev",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"pSchema": {
+				"type": "string"
+			},
+			"pTable": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "AzureSqlDWTable",
+		"schema": [],
+		"typeProperties": {
+			"schema": {
+				"value": "@dataset().pSchema",
+				"type": "Expression"
+			},
+			"table": {
+				"value": "@dataset().pTable",
+				"type": "Expression"
+			}
+		}
+	},
+	"type": "Microsoft.Synapse/workspaces/datasets"
+}

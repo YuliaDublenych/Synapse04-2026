@@ -1,0 +1,20 @@
+{
+	"name": "bronze_tables",
+	"properties": {
+		"folder": {
+			"name": "test"
+		},
+		"content": {
+			"query": "IF OBJECT_ID('bronze.customers', 'U') IS NOT NULL\n    DROP TABLE bronze.customers;\nGO\n\nCREATE TABLE bronze.customers\n(\n    customer_id     VARCHAR(50)    NULL,\n    customer_name   VARCHAR(200)   NULL,\n    city            VARCHAR(100)   NULL,\n    signup_date     VARCHAR(50)    NULL,\n    filename        VARCHAR(255)   NULL,\n    etlrunid        VARCHAR(100)   NULL,\n    createdate      DATETIME       NULL\n)\nWITH\n(\n    DISTRIBUTION = ROUND_ROBIN,\n    HEAP\n);\nGO\n\n\nIF OBJECT_ID('bronze.products', 'U') IS NOT NULL\n    DROP TABLE bronze.products;\nGO\n\nCREATE TABLE bronze.products\n(\n    product_id      VARCHAR(50)    NULL,\n    product_name    VARCHAR(200)   NULL,\n    category        VARCHAR(100)   NULL,\n    unit_price      VARCHAR(50)    NULL,\n    filename        VARCHAR(255)   NULL,\n    etlrunid        VARCHAR(100)   NULL,\n    createdate      DATETIME       NULL\n)\nWITH\n(\n    DISTRIBUTION = ROUND_ROBIN,\n    HEAP\n);\nGO\n\nIF OBJECT_ID('bronze.orders', 'U') IS NOT NULL\n    DROP TABLE bronze.orders;\nGO\n\nCREATE TABLE bronze.orders\n(\n    order_id        VARCHAR(50)    NULL,\n    customer_id     VARCHAR(50)    NULL,\n    product_id      VARCHAR(50)    NULL,\n    quantity        VARCHAR(50)    NULL,\n    order_date      VARCHAR(50)    NULL,\n    filename        VARCHAR(255)   NULL,\n    etlrunid        VARCHAR(100)   NULL,\n    createdate      DATETIME       NULL\n)\nWITH\n(\n    DISTRIBUTION = ROUND_ROBIN,\n    HEAP\n);\nGO",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "dsqlp_dev02",
+				"poolName": "dsqlp_dev02"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}

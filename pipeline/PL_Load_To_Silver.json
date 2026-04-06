@@ -1,0 +1,57 @@
+{
+	"name": "PL_Load_To_Silver",
+	"properties": {
+		"activities": [
+			{
+				"name": "sp_silver_load",
+				"type": "SqlPoolStoredProcedure",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"sqlPool": {
+					"referenceName": "dsqlp_dev02",
+					"type": "SqlPoolReference"
+				},
+				"typeProperties": {
+					"storedProcedureName": "[silver].[usp_exec]",
+					"storedProcedureParameters": {
+						"load_run_id": {
+							"value": {
+								"value": "@pipeline().parameters.p_load_run_id",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"procname": {
+							"value": {
+								"value": "@pipeline().parameters.p_procname",
+								"type": "Expression"
+							},
+							"type": "String"
+						}
+					}
+				}
+			}
+		],
+		"parameters": {
+			"p_load_run_id": {
+				"type": "string"
+			},
+			"p_procname": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "test"
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-04-05T19:20:56Z"
+	},
+	"type": "Microsoft.Synapse/workspaces/pipelines"
+}

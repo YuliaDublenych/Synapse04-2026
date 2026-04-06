@@ -1,0 +1,20 @@
+{
+	"name": "silver_tables",
+	"properties": {
+		"folder": {
+			"name": "test"
+		},
+		"content": {
+			"query": "\n\nIF OBJECT_ID('silver.customers', 'U') IS NOT NULL\n    DROP TABLE silver.customers;\nGO\n\nCREATE TABLE silver.customers\n(\n    customer_id      INT            NOT NULL,\n    customer_name    VARCHAR(200)   NOT NULL,\n    city             VARCHAR(100)   NULL,\n    signup_date      DATE           NULL\n)\nWITH\n(\n    DISTRIBUTION = ROUND_ROBIN,\n    HEAP\n);\nGO\n\nIF OBJECT_ID('silver.products', 'U') IS NOT NULL\n    DROP TABLE silver.products;\nGO\n\nCREATE TABLE silver.products\n(\n    product_id      INT             NOT NULL,\n    product_name    VARCHAR(200)    NOT NULL,\n    category        VARCHAR(100)    NULL,\n    unit_price      DECIMAL(18,2)   NULL\n)\nWITH\n(\n    DISTRIBUTION = ROUND_ROBIN,\n    HEAP\n);\nGO\n\nIF OBJECT_ID('silver.orders', 'U') IS NOT NULL\n    DROP TABLE silver.orders;\nGO\n\nCREATE TABLE silver.orders\n(\n    order_id INT NULL,\n    customer_id INT NULL,\n    product_id INT NULL,\n    quantity INT NULL,\n    order_date DATE NULL\n)\nWITH\n(\n    DISTRIBUTION = ROUND_ROBIN,\n    HEAP\n);\nGO",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "dsqlp_dev02",
+				"poolName": "dsqlp_dev02"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}
