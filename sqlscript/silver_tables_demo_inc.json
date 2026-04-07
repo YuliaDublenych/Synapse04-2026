@@ -5,13 +5,13 @@
 			"name": "test_incremental_load"
 		},
 		"content": {
-			"query": "",
+			"query": "/*============================================================\n  Recreate incremental silver tables for demo project\n============================================================*/\n\nIF OBJECT_ID('silver.customers_inc', 'U') IS NOT NULL\n    DROP TABLE silver.customers_inc;\nGO\n\nCREATE TABLE silver.customers_inc\n(\n    customer_id      INT           NULL,\n    customer_name    VARCHAR(200)  NULL,\n    city             VARCHAR(100)  NULL,\n    signup_date      DATE          NULL,\n    created_at_utc   DATETIME2     NULL,\n    updated_at_utc   DATETIME2     NULL,\n    load_run_id      VARCHAR(100)  NULL\n)\nWITH\n(\n    DISTRIBUTION = ROUND_ROBIN,\n    HEAP\n);\nGO\n\nIF OBJECT_ID('silver.products_inc', 'U') IS NOT NULL\n    DROP TABLE silver.products_inc;\nGO\n\nCREATE TABLE silver.products_inc\n(\n    product_id       INT            NULL,\n    product_name     VARCHAR(200)   NULL,\n    category         VARCHAR(100)   NULL,\n    unit_price       DECIMAL(18,2)  NULL,\n    created_at_utc   DATETIME2      NULL,\n    updated_at_utc   DATETIME2      NULL,\n    load_run_id      VARCHAR(100)   NULL\n)\nWITH\n(\n    DISTRIBUTION = ROUND_ROBIN,\n    HEAP\n);\nGO\n\nIF OBJECT_ID('silver.orders_inc', 'U') IS NOT NULL\n    DROP TABLE silver.orders_inc;\nGO\n\nCREATE TABLE silver.orders_inc\n(\n    order_id         INT           NULL,\n    customer_id      INT           NULL,\n    product_id       INT           NULL,\n    quantity         INT           NULL,\n    order_date       DATE          NULL,\n    created_at_utc   DATETIME2     NULL,\n    updated_at_utc   DATETIME2     NULL,\n    load_run_id      VARCHAR(100)  NULL\n)\nWITH\n(\n    DISTRIBUTION = ROUND_ROBIN,\n    HEAP\n);\nGO",
 			"metadata": {
 				"language": "sql"
 			},
 			"currentConnection": {
-				"databaseName": "master",
-				"poolName": "Built-in"
+				"databaseName": "dsqlp_dev02",
+				"poolName": "dsqlp_dev02"
 			},
 			"resultLimit": 5000
 		},
