@@ -1,11 +1,11 @@
 {
-	"name": "watermark_table",
+	"name": "watermark",
 	"properties": {
 		"folder": {
 			"name": "test_incremental_load"
 		},
 		"content": {
-			"query": "/*============================================================\n  Watermark control table\n============================================================*/\nIF OBJECT_ID('config.WatermarkControl', 'U') IS NOT NULL\n    DROP TABLE config.WatermarkControl;\nGO\n\nCREATE TABLE config.WatermarkControl\n(\n    WatermarkId         INT IDENTITY(1,1) NOT NULL,\n    ProjectName         VARCHAR(100) NOT NULL,\n    LoadType            VARCHAR(50)  NOT NULL,     -- FULL / INCREMENTAL\n    TargetTable         VARCHAR(128) NOT NULL,     -- patients, visits, customers...\n    WatermarkColumn     VARCHAR(128) NOT NULL,     -- visit_date, order_date, etc.\n    LastProcessedValue  DATETIME2    NULL,\n    LastRunId           VARCHAR(100) NULL,\n    LastUpdatedAtUtc    DATETIME2    NULL\n)\nWITH\n(\n    DISTRIBUTION = ROUND_ROBIN,\n    HEAP\n);\nGO",
+			"query": "/*============================================================\n  Watermark control table\n============================================================*/\nIF OBJECT_ID('config.WatermarkControl', 'U') IS NOT NULL\n    DROP TABLE config.WatermarkControl;\nGO\n\nCREATE TABLE config.WatermarkControl\n(\n    WatermarkId         INT IDENTITY(1,1) NOT NULL,\n    ProjectName         VARCHAR(100) NOT NULL,\n    LoadType            VARCHAR(50)  NOT NULL,     -- FULL / INCREMENTAL\n    TargetTable         VARCHAR(128) NOT NULL,     -- patients, visits, customers...\n    WatermarkColumn     VARCHAR(128) NOT NULL,     -- visit_date, order_date, etc.\n    LastProcessedValue  DATETIME2    NULL,\n    LastRunId           VARCHAR(100) NULL,\n    LastUpdatedAtUtc    DATETIME2    NULL\n)\nWITH\n(\n    DISTRIBUTION = ROUND_ROBIN,\n    HEAP\n);\nGO\n\nINSERT INTO config.WatermarkControl\n(\n    ProjectName,\n    LoadType,\n    TargetTable,\n    WatermarkColumn,\n    LastProcessedValue,\n    LastRunId,\n    LastUpdatedAtUtc\n)\nSELECT 'waittime', 'INCREMENTAL', 'visits', 'visit_date', NULL, NULL, NULL\nUNION ALL\nSELECT 'demo', 'INCREMENTAL', 'orders', 'order_date', NULL, NULL, NULL;\nGO\n\n",
 			"metadata": {
 				"language": "sql"
 			},

@@ -18,7 +18,7 @@
 					"source": {
 						"type": "SqlDWSource",
 						"sqlReaderQuery": {
-							"value": "@concat(\n'SELECT\n    ConfigId,\n    ProjectName,\n    LoadOrder,\n    LoadType,\n    SourceContainer,\n    SourceDirectory,\n    FileName,\n    TargetSchema,\n    TargetTable,\n    SilverProcName,\n    EnableSilver\nFROM config.IngestionConfig\nWHERE IsActive = 1\n  AND ProjectName = ''',\npipeline().parameters.pProjectName,\n'''\n  AND LoadType = ''',\npipeline().parameters.pLoadType,\n'''\nORDER BY LoadOrder'\n)",
+							"value": "@concat(\n'SELECT\n    ConfigId,\n    ProjectName,\n    LoadOrder,\n    LoadType,\n    SourceContainer,\n    SourceDirectory,\n    FileName,\n    TargetSchema,\n    TargetTable,\n    DeltaProcName,\n    SilverProcName,\n    EnableSilver\nFROM config.IngestionConfig\nWHERE IsActive = 1\n  AND ProjectName = ''',\npipeline().parameters.pProjectName,\n'''\n  AND LoadType = ''',\npipeline().parameters.pLoadType,\n'''\nORDER BY LoadOrder'\n)",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
@@ -266,7 +266,7 @@
 							"type": "IfCondition",
 							"dependsOn": [
 								{
-									"activity": "Execute PL_bronze",
+									"activity": "If Condition2",
 									"dependencyConditions": [
 										"Succeeded"
 									]
@@ -465,6 +465,47 @@
 													"value": "Succeeded",
 													"type": "String"
 												}
+											}
+										}
+									}
+								]
+							}
+						},
+						{
+							"name": "If Condition2",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "Execute PL_bronze",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@not(empty(item().DeltaProcName))",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "Execute PL_Load_To_Delta_copy2",
+										"type": "ExecutePipeline",
+										"dependsOn": [],
+										"policy": {
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"pipeline": {
+												"referenceName": "PL_Load_To_Delta",
+												"type": "PipelineReference"
+											},
+											"waitOnCompletion": true,
+											"parameters": {
+												"p_load_run_id": "@pipeline().RunId",
+												"p_procname": "@item().DeltaProcName"
 											}
 										}
 									}

@@ -5,13 +5,13 @@
 			"name": "test_incremental_load"
 		},
 		"content": {
-			"query": "IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'config')\n    EXEC ('CREATE SCHEMA config');\nGO\n\nIF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'audit')\n    EXEC ('CREATE SCHEMA audit');\nGO\n\nIF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'bronze')\n    EXEC ('CREATE SCHEMA bronze');\nGO\n\nIF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'silver')\n    EXEC ('CREATE SCHEMA silver');\nGO",
+			"query": "IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'config')\n    EXEC ('CREATE SCHEMA config');\nGO\n\nIF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'audit')\n    EXEC ('CREATE SCHEMA audit');\nGO\n\nIF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'bronze')\n    EXEC ('CREATE SCHEMA bronze');\nGO\n\nIF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'silver')\n    EXEC ('CREATE SCHEMA silver');\nGO\n\n\nIF NOT EXISTS\n(\n    SELECT 1\n    FROM sys.schemas\n    WHERE name = 'staging'\n)\nBEGIN\n    EXEC ('CREATE SCHEMA staging');\nEND;\nGO",
 			"metadata": {
 				"language": "sql"
 			},
 			"currentConnection": {
-				"databaseName": "master",
-				"poolName": "Built-in"
+				"databaseName": "dsqlp_dev02",
+				"poolName": "dsqlp_dev02"
 			},
 			"resultLimit": 5000
 		},

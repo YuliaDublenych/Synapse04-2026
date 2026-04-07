@@ -1,0 +1,20 @@
+{
+	"name": "sp_staging_delta",
+	"properties": {
+		"folder": {
+			"name": "test_incremental_load"
+		},
+		"content": {
+			"query": "IF OBJECT_ID('staging.sp_load_visits_delta', 'P') IS NOT NULL\n    DROP PROCEDURE staging.sp_load_visits_delta;\nGO\n\nCREATE PROCEDURE staging.sp_load_visits_delta\n    @load_run_id VARCHAR(100)\nAS\nBEGIN\n    DECLARE @last_watermark DATETIME2;\n\n    SELECT @last_watermark = LastProcessedValue\n    FROM config.WatermarkControl\n    WHERE ProjectName = 'waittime'\n      AND LoadType = 'INCREMENTAL'\n      AND TargetTable = 'visits';\n\n    TRUNCATE TABLE staging.visits_delta;\n\n    INSERT INTO staging.visits_delta\n    (\n        visit_id,\n        patient_id,\n        visit_date,\n        source_file,\n        load_run_id,\n        created_at_utc\n    )\n    SELECT\n        TRY_CAST(LTRIM(RTRIM(b.visit_id)) AS INT)        AS visit_id,\n        TRY_CAST(LTRIM(RTRIM(b.patient_id)) AS INT)      AS patient_id,\n        TRY_CAST(LTRIM(RTRIM(b.visit_date)) AS DATE)     AS visit_date,\n        b.filename                                       AS source_file,\n        @load_run_id                                     AS load_run_id,\n        GETUTCDATE()                                     AS created_at_utc\n    FROM bronze.visits b\n    WHERE\n        @last_watermark IS NULL\n        OR TRY_CAST(LTRIM(RTRIM(b.visit_date)) AS DATETIME2) > @last_watermark;\nEND;\nGO\n\n\nIF OBJECT_ID('staging.sp_load_orders_delta', 'P') IS NOT NULL\n    DROP PROCEDURE staging.sp_load_orders_delta;\nGO\n\nCREATE PROCEDURE staging.sp_load_orders_delta\n    @load_run_id VARCHAR(100)\nAS\nBEGIN\n    DECLARE @last_watermark DATETIME2;\n\n    SELECT @last_watermark = LastProcessedValue\n    FROM config.WatermarkControl\n    WHERE ProjectName = 'demo'\n      AND LoadType = 'INCREMENTAL'\n      AND TargetTable = 'orders';\n\n    TRUNCATE TABLE staging.orders_delta;\n\n    INSERT INTO staging.orders_delta\n    (\n        order_id,\n        customer_id,\n        product_id,\n        quantity,\n        order_date,\n        source_file,\n        load_run_id,\n        created_at_utc\n    )\n    SELECT\n        TRY_CAST(LTRIM(RTRIM(b.order_id)) AS INT)        AS order_id,\n        TRY_CAST(LTRIM(RTRIM(b.customer_id)) AS INT)     AS customer_id,\n        TRY_CAST(LTRIM(RTRIM(b.product_id)) AS INT)      AS product_id,\n        TRY_CAST(LTRIM(RTRIM(b.quantity)) AS INT)        AS quantity,\n        TRY_CAST(LTRIM(RTRIM(b.order_date)) AS DATE)     AS order_date,\n        b.filename                                       AS source_file,\n        @load_run_id                                     AS load_run_id,\n        GETUTCDATE()                                     AS created_at_utc\n    FROM bronze.orders b\n    WHERE\n        @last_watermark IS NULL\n        OR TRY_CAST(LTRIM(RTRIM(b.order_date)) AS DATETIME2) > @last_watermark;\nEND;\nGO",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "dsqlp_dev02",
+				"poolName": "dsqlp_dev02"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}

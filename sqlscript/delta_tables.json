@@ -1,0 +1,20 @@
+{
+	"name": "delta_tables",
+	"properties": {
+		"folder": {
+			"name": "test_incremental_load"
+		},
+		"content": {
+			"query": "IF OBJECT_ID('staging.visits_delta', 'U') IS NOT NULL\n    DROP TABLE staging.visits_delta;\nGO\n\nCREATE TABLE staging.visits_delta\n(\n    visit_id        INT           NULL,\n    patient_id      INT           NULL,\n    visit_date      DATE          NULL,\n    source_file     VARCHAR(512)  NULL,\n    load_run_id     VARCHAR(100)  NULL,\n    created_at_utc  DATETIME2     NULL\n)\nWITH\n(\n    DISTRIBUTION = ROUND_ROBIN,\n    HEAP\n);\nGO\n\nIF OBJECT_ID('staging.orders_delta', 'U') IS NOT NULL\n    DROP TABLE staging.orders_delta;\nGO\n\nCREATE TABLE staging.orders_delta\n(\n    order_id        INT           NULL,\n    customer_id     INT           NULL,\n    product_id      INT           NULL,\n    quantity        INT           NULL,\n    order_date      DATE          NULL,\n    source_file     VARCHAR(512)  NULL,\n    load_run_id     VARCHAR(100)  NULL,\n    created_at_utc  DATETIME2     NULL\n)\nWITH\n(\n    DISTRIBUTION = ROUND_ROBIN,\n    HEAP\n);\nGO",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "dsqlp_dev02",
+				"poolName": "dsqlp_dev02"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}
