@@ -1,0 +1,33 @@
+IF OBJECT_ID('silver.patients', 'U') IS NOT NULL
+    DROP TABLE silver.patients;
+GO
+
+CREATE TABLE silver.patients
+(
+    patient_id    INT           NULL,
+    patient_name  VARCHAR(200)  NULL,
+    gender        VARCHAR(50)   NULL
+)
+WITH
+(
+    DISTRIBUTION = ROUND_ROBIN,
+    HEAP
+);
+GO
+
+IF OBJECT_ID('silver.visits', 'U') IS NOT NULL
+    DROP TABLE silver.visits;
+GO
+
+CREATE TABLE silver.visits
+(
+    visit_id      INT           NULL,
+    patient_id    INT           NULL,
+    visit_date    DATE          NULL
+)
+WITH
+(
+    DISTRIBUTION = ROUND_ROBIN,
+    HEAP
+);
+GO
