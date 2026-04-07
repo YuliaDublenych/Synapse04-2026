@@ -1,0 +1,79 @@
+IF OBJECT_ID('silver.sp_load_customers', 'P') IS NOT NULL
+    DROP PROCEDURE silver.sp_load_customers;
+GO
+
+CREATE PROCEDURE silver.sp_load_customers
+AS
+BEGIN
+    TRUNCATE TABLE silver.customers;
+
+    INSERT INTO silver.customers
+    (
+        customer_id,
+        customer_name,
+        city,
+        signup_date
+    )
+    SELECT
+        TRY_CAST(LTRIM(RTRIM(customer_id)) AS INT),
+        LTRIM(RTRIM(customer_name)),
+        NULLIF(LTRIM(RTRIM(city)), ''),
+        TRY_CAST(LTRIM(RTRIM(signup_date)) AS DATE)
+    FROM bronze.customers
+    WHERE TRY_CAST(LTRIM(RTRIM(customer_id)) AS INT) IS NOT NULL;
+END;
+GO
+
+IF OBJECT_ID('silver.sp_load_products', 'P') IS NOT NULL
+    DROP PROCEDURE silver.sp_load_products;
+GO
+
+CREATE PROCEDURE silver.sp_load_products
+AS
+BEGIN
+    TRUNCATE TABLE silver.products;
+
+    INSERT INTO silver.products
+    (
+        product_id,
+        product_name,
+        category,
+        unit_price
+    )
+    SELECT
+        TRY_CAST(LTRIM(RTRIM(product_id)) AS INT),
+        LTRIM(RTRIM(product_name)),
+        NULLIF(LTRIM(RTRIM(category)), ''),
+        TRY_CAST(LTRIM(RTRIM(unit_price)) AS DECIMAL(18,2))
+    FROM bronze.products
+    WHERE TRY_CAST(LTRIM(RTRIM(product_id)) AS INT) IS NOT NULL;
+END;
+GO
+
+IF OBJECT_ID('silver.sp_load_orders', 'P') IS NOT NULL
+    DROP PROCEDURE silver.sp_load_orders;
+GO
+
+CREATE PROCEDURE silver.sp_load_orders
+AS
+BEGIN
+    TRUNCATE TABLE silver.orders;
+
+    INSERT INTO silver.orders
+    (
+        order_id,
+        customer_id,
+        product_id,
+        quantity,
+        order_date
+    )
+    SELECT
+        TRY_CAST(LTRIM(RTRIM(order_id)) AS INT),
+        TRY_CAST(LTRIM(RTRIM(customer_id)) AS INT),
+        TRY_CAST(LTRIM(RTRIM(product_id)) AS INT),
+        TRY_CAST(LTRIM(RTRIM(quantity)) AS INT),
+        TRY_CAST(LTRIM(RTRIM(order_date)) AS DATE)
+    FROM bronze.orders
+    WHERE TRY_CAST(LTRIM(RTRIM(order_id)) AS INT) IS NOT NULL;
+END;
+GO
