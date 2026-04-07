@@ -1,0 +1,20 @@
+{
+	"name": "bronze_tables_waittime",
+	"properties": {
+		"folder": {
+			"name": "test"
+		},
+		"content": {
+			"query": "IF OBJECT_ID('bronze.patients', 'U') IS NOT NULL\n    DROP TABLE bronze.patients;\nGO\n\nCREATE TABLE bronze.patients\n(\n    patient_id    VARCHAR(100) NULL,\n    patient_name  VARCHAR(200) NULL,\n    gender        VARCHAR(50)  NULL,\n    filename      VARCHAR(512) NULL,\n    etlrunid      VARCHAR(100) NULL,\n    createdate    DATETIME     NULL\n)\nWITH\n(\n    DISTRIBUTION = ROUND_ROBIN,\n    HEAP\n);\nGO\n\n\nIF OBJECT_ID('bronze.visits', 'U') IS NOT NULL\n    DROP TABLE bronze.visits;\nGO\n\nCREATE TABLE bronze.visits\n(\n    visit_id      VARCHAR(100) NULL,\n    patient_id    VARCHAR(100) NULL,\n    visit_date    VARCHAR(100) NULL,\n    filename      VARCHAR(512) NULL,\n    etlrunid      VARCHAR(100)   NULL,\n    createdate    DATETIME       NULL\n)\nWITH\n(\n    DISTRIBUTION = ROUND_ROBIN,\n    HEAP\n);\nGO",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "dsqlp_dev02",
+				"poolName": "dsqlp_dev02"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}

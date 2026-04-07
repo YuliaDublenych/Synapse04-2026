@@ -1,0 +1,20 @@
+{
+	"name": "sp_silver_waittime",
+	"properties": {
+		"folder": {
+			"name": "test"
+		},
+		"content": {
+			"query": "IF OBJECT_ID('silver.sp_load_patients', 'P') IS NOT NULL\n    DROP PROCEDURE silver.sp_load_patients;\nGO\n\nCREATE PROCEDURE silver.sp_load_patients\n    @load_run_id VARCHAR(100)\nAS\nBEGIN\n    TRUNCATE TABLE silver.patients;\n\n    INSERT INTO silver.patients\n    (\n        patient_id,\n        patient_name,\n        gender\n    )\n    SELECT\n        TRY_CAST(patient_id AS INT)            AS patient_id,\n        NULLIF(LTRIM(RTRIM(patient_name)), '') AS patient_name,\n        NULLIF(LTRIM(RTRIM(gender)), '')       AS gender\n    FROM bronze.patients;\nEND;\nGO\n\nIF OBJECT_ID('silver.sp_load_visits', 'P') IS NOT NULL\n    DROP PROCEDURE silver.sp_load_visits;\nGO\n\nCREATE PROCEDURE silver.sp_load_visits\n    @load_run_id VARCHAR(100)\nAS\nBEGIN\n    TRUNCATE TABLE silver.visits;\n\n    INSERT INTO silver.visits\n    (\n        visit_id,\n        patient_id,\n        visit_date\n    )\n    SELECT\n        TRY_CAST(visit_id AS INT)    AS visit_id,\n        TRY_CAST(patient_id AS INT)  AS patient_id,\n        TRY_CAST(visit_date AS DATE) AS visit_date\n    FROM bronze.visits;\nEND;\nGO",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "dsqlp_dev02",
+				"poolName": "dsqlp_dev02"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}

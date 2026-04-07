@@ -1,0 +1,20 @@
+{
+	"name": "silver_tables_waittime",
+	"properties": {
+		"folder": {
+			"name": "test"
+		},
+		"content": {
+			"query": "\nIF OBJECT_ID('silver.patients', 'U') IS NOT NULL\n    DROP TABLE silver.patients;\nGO\n\nCREATE TABLE silver.patients\n(\n    patient_id    INT           NULL,\n    patient_name  VARCHAR(200)  NULL,\n    gender        VARCHAR(50)   NULL\n)\nWITH\n(\n    DISTRIBUTION = ROUND_ROBIN,\n    HEAP\n);\nGO\n\nIF OBJECT_ID('silver.visits', 'U') IS NOT NULL\n    DROP TABLE silver.visits;\nGO\n\nCREATE TABLE silver.visits\n(\n    visit_id      INT           NULL,\n    patient_id    INT           NULL,\n    visit_date    DATE          NULL\n)\nWITH\n(\n    DISTRIBUTION = ROUND_ROBIN,\n    HEAP\n);\nGO",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "dsqlp_dev02",
+				"poolName": "dsqlp_dev02"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}
