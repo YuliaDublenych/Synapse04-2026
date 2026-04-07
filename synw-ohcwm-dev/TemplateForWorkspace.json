@@ -2310,7 +2310,7 @@
 			"apiVersion": "2019-06-01-preview",
 			"properties": {
 				"content": {
-					"query": "SELECT COUNT(*) AS cnt FROM bronze.customers;\nSELECT COUNT(*) AS cnt FROM bronze.orders;\nSELECT COUNT(*) AS cnt FROM bronze.products;\n\nSELECT TOP 10 * FROM bronze.customers;\nSELECT TOP 10 * FROM bronze.orders;\nSELECT TOP 10 * FROM bronze.products;\n\nSELECT SCHEMA_NAME(schema_id) AS schema_name, name\nFROM sys.tables\nWHERE name IN ('orders', 'customers', 'products');\n\nSELECT 'customers' AS table_name, COUNT(*) AS row_count FROM silver.customers\nUNION ALL\nSELECT 'orders', COUNT(*) FROM silver.orders\nUNION ALL\nSELECT 'products', COUNT(*) FROM silver.products;\n\nSELECT TOP 10 * FROM silver.customers;\nSELECT TOP 10 * FROM silver.orders;\nSELECT TOP 10 * FROM silver.products;\n\nSELECT 'bronze.customers' AS table_name, COUNT(*) AS row_count FROM bronze.customers\nUNION ALL\nSELECT 'silver.customers', COUNT(*) FROM silver.customers\nUNION ALL\nSELECT 'bronze.orders', COUNT(*) FROM bronze.orders\nUNION ALL\nSELECT 'silver.orders', COUNT(*) FROM silver.orders\nUNION ALL\nSELECT 'bronze.products', COUNT(*) FROM bronze.products\nUNION ALL\nSELECT 'silver.products', COUNT(*) FROM silver.products;\n\nSELECT COUNT(*) FROM silver.patients_inc;",
+					"query": "SELECT COUNT(*) AS cnt FROM bronze.customers;\nSELECT COUNT(*) AS cnt FROM bronze.orders;\nSELECT COUNT(*) AS cnt FROM bronze.products;\n\nSELECT TOP 10 * FROM bronze.customers;\nSELECT TOP 10 * FROM bronze.orders;\nSELECT TOP 10 * FROM bronze.products;\n\nSELECT SCHEMA_NAME(schema_id) AS schema_name, name\nFROM sys.tables\nWHERE name IN ('orders', 'customers', 'products');\n\nSELECT 'customers' AS table_name, COUNT(*) AS row_count FROM silver.customers\nUNION ALL\nSELECT 'orders', COUNT(*) FROM silver.orders\nUNION ALL\nSELECT 'products', COUNT(*) FROM silver.products;\n\nSELECT TOP 10 * FROM silver.customers;\nSELECT TOP 10 * FROM silver.orders;\nSELECT TOP 10 * FROM silver.products;\n\nSELECT 'bronze.customers' AS table_name, COUNT(*) AS row_count FROM bronze.customers\nUNION ALL\nSELECT 'silver.customers', COUNT(*) FROM silver.customers\nUNION ALL\nSELECT 'bronze.orders', COUNT(*) FROM bronze.orders\nUNION ALL\nSELECT 'silver.orders', COUNT(*) FROM silver.orders\nUNION ALL\nSELECT 'bronze.products', COUNT(*) FROM bronze.products\nUNION ALL\nSELECT 'silver.products', COUNT(*) FROM silver.products;\n\nSELECT * FROM silver.patients_inc;",
 					"metadata": {
 						"language": "sql"
 					},
@@ -2586,13 +2586,13 @@
 					"name": "test_incremental_load"
 				},
 				"content": {
-					"query": "",
+					"query": "/*============================================================\n  Recreate incremental silver tables for demo project\n============================================================*/\n\nIF OBJECT_ID('silver.customers_inc', 'U') IS NOT NULL\n    DROP TABLE silver.customers_inc;\nGO\n\nCREATE TABLE silver.customers_inc\n(\n    customer_id      INT           NULL,\n    customer_name    VARCHAR(200)  NULL,\n    city             VARCHAR(100)  NULL,\n    signup_date      DATE          NULL,\n    created_at_utc   DATETIME2     NULL,\n    updated_at_utc   DATETIME2     NULL,\n    load_run_id      VARCHAR(100)  NULL\n)\nWITH\n(\n    DISTRIBUTION = ROUND_ROBIN,\n    HEAP\n);\nGO\n\nIF OBJECT_ID('silver.products_inc', 'U') IS NOT NULL\n    DROP TABLE silver.products_inc;\nGO\n\nCREATE TABLE silver.products_inc\n(\n    product_id       INT            NULL,\n    product_name     VARCHAR(200)   NULL,\n    category         VARCHAR(100)   NULL,\n    unit_price       DECIMAL(18,2)  NULL,\n    created_at_utc   DATETIME2      NULL,\n    updated_at_utc   DATETIME2      NULL,\n    load_run_id      VARCHAR(100)   NULL\n)\nWITH\n(\n    DISTRIBUTION = ROUND_ROBIN,\n    HEAP\n);\nGO\n\nIF OBJECT_ID('silver.orders_inc', 'U') IS NOT NULL\n    DROP TABLE silver.orders_inc;\nGO\n\nCREATE TABLE silver.orders_inc\n(\n    order_id         INT           NULL,\n    customer_id      INT           NULL,\n    product_id       INT           NULL,\n    quantity         INT           NULL,\n    order_date       DATE          NULL,\n    created_at_utc   DATETIME2     NULL,\n    updated_at_utc   DATETIME2     NULL,\n    load_run_id      VARCHAR(100)  NULL\n)\nWITH\n(\n    DISTRIBUTION = ROUND_ROBIN,\n    HEAP\n);\nGO",
 					"metadata": {
 						"language": "sql"
 					},
 					"currentConnection": {
-						"databaseName": "master",
-						"poolName": "Built-in"
+						"databaseName": "dsqlp_dev02",
+						"poolName": "dsqlp_dev02"
 					},
 					"resultLimit": 5000
 				},
@@ -2678,13 +2678,13 @@
 					"name": "test_incremental_load"
 				},
 				"content": {
-					"query": "",
+					"query": "IF OBJECT_ID('silver.sp_load_customers_inc', 'P') IS NOT NULL\n    DROP PROCEDURE silver.sp_load_customers_inc;\nGO\n\nCREATE PROCEDURE silver.sp_load_customers_inc\n    @load_run_id VARCHAR(100)\nAS\nBEGIN\n    INSERT INTO silver.customers_inc\n    (\n        customer_id,\n        customer_name,\n        city,\n        signup_date,\n        created_at_utc,\n        updated_at_utc,\n        load_run_id\n    )\n    SELECT\n        TRY_CAST(LTRIM(RTRIM(b.customer_id)) AS INT),\n        NULLIF(LTRIM(RTRIM(b.customer_name)), ''),\n        NULLIF(LTRIM(RTRIM(b.city)), ''),\n        TRY_CAST(LTRIM(RTRIM(b.signup_date)) AS DATE),\n        GETUTCDATE(),\n        GETUTCDATE(),\n        @load_run_id\n    FROM bronze.customers b\n    WHERE NOT EXISTS\n    (\n        SELECT 1\n        FROM silver.customers_inc s\n        WHERE s.customer_id = TRY_CAST(LTRIM(RTRIM(b.customer_id)) AS INT)\n    );\nEND;\nGO\n\n\nIF OBJECT_ID('silver.sp_load_products_inc', 'P') IS NOT NULL\n    DROP PROCEDURE silver.sp_load_products_inc;\nGO\n\nCREATE PROCEDURE silver.sp_load_products_inc\n    @load_run_id VARCHAR(100)\nAS\nBEGIN\n    INSERT INTO silver.products_inc\n    (\n        product_id,\n        product_name,\n        category,\n        unit_price,\n        created_at_utc,\n        updated_at_utc,\n        load_run_id\n    )\n    SELECT\n        TRY_CAST(LTRIM(RTRIM(b.product_id)) AS INT),\n        NULLIF(LTRIM(RTRIM(b.product_name)), ''),\n        NULLIF(LTRIM(RTRIM(b.category)), ''),\n        TRY_CAST(LTRIM(RTRIM(b.unit_price)) AS DECIMAL(18,2)),\n        GETUTCDATE(),\n        GETUTCDATE(),\n        @load_run_id\n    FROM bronze.products b\n    WHERE NOT EXISTS\n    (\n        SELECT 1\n        FROM silver.products_inc s\n        WHERE s.product_id = TRY_CAST(LTRIM(RTRIM(b.product_id)) AS INT)\n    );\nEND;\nGO\n\n\nIF OBJECT_ID('silver.sp_load_orders_inc', 'P') IS NOT NULL\n    DROP PROCEDURE silver.sp_load_orders_inc;\nGO\n\nCREATE PROCEDURE silver.sp_load_orders_inc\n    @load_run_id VARCHAR(100)\nAS\nBEGIN\n    INSERT INTO silver.orders_inc\n    (\n        order_id,\n        customer_id,\n        product_id,\n        quantity,\n        order_date,\n        created_at_utc,\n        updated_at_utc,\n        load_run_id\n    )\n    SELECT\n        TRY_CAST(LTRIM(RTRIM(b.order_id)) AS INT),\n        TRY_CAST(LTRIM(RTRIM(b.customer_id)) AS INT),\n        TRY_CAST(LTRIM(RTRIM(b.product_id)) AS INT),\n        TRY_CAST(LTRIM(RTRIM(b.quantity)) AS INT),\n        TRY_CAST(LTRIM(RTRIM(b.order_date)) AS DATE),\n        GETUTCDATE(),\n        GETUTCDATE(),\n        @load_run_id\n    FROM bronze.orders b\n    WHERE NOT EXISTS\n    (\n        SELECT 1\n        FROM silver.orders_inc s\n        WHERE s.order_id = TRY_CAST(LTRIM(RTRIM(b.order_id)) AS INT)\n    );\nEND;\nGO",
 					"metadata": {
 						"language": "sql"
 					},
 					"currentConnection": {
-						"databaseName": "master",
-						"poolName": "Built-in"
+						"databaseName": "dsqlp_dev02",
+						"poolName": "dsqlp_dev02"
 					},
 					"resultLimit": 5000
 				},
@@ -2771,6 +2771,29 @@
 				},
 				"content": {
 					"query": "IF OBJECT_ID('silver.sp_load_patients_inc', 'P') IS NOT NULL\n    DROP PROCEDURE silver.sp_load_patients_inc;\nGO\n\nCREATE PROCEDURE silver.sp_load_patients_inc\n    @load_run_id VARCHAR(100)\nAS\nBEGIN\n    INSERT INTO silver.patients_inc\n    (\n        patient_id,\n        patient_name,\n        gender,\n        created_at_utc,\n        updated_at_utc,\n        load_run_id\n    )\n    SELECT\n        TRY_CAST(b.patient_id AS INT)                  AS patient_id,\n        NULLIF(LTRIM(RTRIM(b.patient_name)), '')       AS patient_name,\n        NULLIF(LTRIM(RTRIM(b.gender)), '')             AS gender,\n        GETUTCDATE()                                   AS created_at_utc,\n        GETUTCDATE()                                   AS updated_at_utc,\n        @load_run_id                                   AS load_run_id\n    FROM bronze.patients b\n    WHERE NOT EXISTS\n    (\n        SELECT 1\n        FROM silver.patients_inc s\n        WHERE s.patient_id = TRY_CAST(b.patient_id AS INT)\n    );\nEND;\nGO\n\n\nIF OBJECT_ID('silver.sp_load_visits_inc', 'P') IS NOT NULL\n    DROP PROCEDURE silver.sp_load_visits_inc;\nGO\n\nCREATE PROCEDURE silver.sp_load_visits_inc\n    @load_run_id VARCHAR(100)\nAS\nBEGIN\n    INSERT INTO silver.visits_inc\n    (\n        visit_id,\n        patient_id,\n        visit_date,\n        created_at_utc,\n        updated_at_utc,\n        load_run_id\n    )\n    SELECT\n        TRY_CAST(b.visit_id AS INT)                    AS visit_id,\n        TRY_CAST(b.patient_id AS INT)                  AS patient_id,\n        TRY_CAST(b.visit_date AS DATE)                 AS visit_date,\n        GETUTCDATE()                                   AS created_at_utc,\n        GETUTCDATE()                                   AS updated_at_utc,\n        @load_run_id                                   AS load_run_id\n    FROM bronze.visits b\n    WHERE NOT EXISTS\n    (\n        SELECT 1\n        FROM silver.visits_inc s\n        WHERE s.visit_id = TRY_CAST(b.visit_id AS INT)\n    );\nEND;\nGO",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "dsqlp_dev02",
+						"poolName": "dsqlp_dev02"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/watermark_table')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"folder": {
+					"name": "test_incremental_load"
+				},
+				"content": {
+					"query": "/*============================================================\n  Watermark control table\n============================================================*/\nIF OBJECT_ID('config.WatermarkControl', 'U') IS NOT NULL\n    DROP TABLE config.WatermarkControl;\nGO\n\nCREATE TABLE config.WatermarkControl\n(\n    WatermarkId         INT IDENTITY(1,1) NOT NULL,\n    ProjectName         VARCHAR(100) NOT NULL,\n    LoadType            VARCHAR(50)  NOT NULL,     -- FULL / INCREMENTAL\n    TargetTable         VARCHAR(128) NOT NULL,     -- patients, visits, customers...\n    WatermarkColumn     VARCHAR(128) NOT NULL,     -- visit_date, order_date, etc.\n    LastProcessedValue  DATETIME2    NULL,\n    LastRunId           VARCHAR(100) NULL,\n    LastUpdatedAtUtc    DATETIME2    NULL\n)\nWITH\n(\n    DISTRIBUTION = ROUND_ROBIN,\n    HEAP\n);\nGO",
 					"metadata": {
 						"language": "sql"
 					},
