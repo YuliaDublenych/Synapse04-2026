@@ -463,6 +463,69 @@
 			]
 		},
 		{
+			"name": "[concat(parameters('workspaceName'), '/PL_Load_To_Delta')]",
+			"type": "Microsoft.Synapse/workspaces/pipelines",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"activities": [
+					{
+						"name": "sp_load_to_delta",
+						"type": "SqlPoolStoredProcedure",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"sqlPool": {
+							"referenceName": "dsqlp_dev02",
+							"type": "SqlPoolReference"
+						},
+						"typeProperties": {
+							"storedProcedureName": "[silver].[usp_exec]",
+							"storedProcedureParameters": {
+								"load_run_id": {
+									"value": {
+										"value": "@pipeline().parameters.p_load_run_id",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"procname": {
+									"value": {
+										"value": "@pipeline().parameters.p_procname",
+										"type": "Expression"
+									},
+									"type": "String"
+								}
+							}
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"parameters": {
+					"p_load_run_id": {
+						"type": "string"
+					},
+					"p_procname": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "test_incremental_load"
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/sqlPools/dsqlp_dev02')]"
+			]
+		},
+		{
 			"name": "[concat(parameters('workspaceName'), '/PL_Load_To_Silver')]",
 			"type": "Microsoft.Synapse/workspaces/pipelines",
 			"apiVersion": "2019-06-01-preview",
@@ -1120,7 +1183,7 @@
 							"source": {
 								"type": "SqlDWSource",
 								"sqlReaderQuery": {
-									"value": "@concat(\n'SELECT\n    ConfigId,\n    ProjectName,\n    LoadOrder,\n    LoadType,\n    SourceContainer,\n    SourceDirectory,\n    FileName,\n    TargetSchema,\n    TargetTable,\n    SilverProcName,\n    EnableSilver\nFROM config.IngestionConfig\nWHERE IsActive = 1\n  AND ProjectName = ''',\npipeline().parameters.pProjectName,\n'''\n  AND LoadType = ''',\npipeline().parameters.pLoadType,\n'''\nORDER BY LoadOrder'\n)",
+									"value": "@concat(\n'SELECT\n    ConfigId,\n    ProjectName,\n    LoadOrder,\n    LoadType,\n    SourceContainer,\n    SourceDirectory,\n    FileName,\n    TargetSchema,\n    TargetTable,\n    DeltaProcName,\n    SilverProcName,\n    EnableSilver\nFROM config.IngestionConfig\nWHERE IsActive = 1\n  AND ProjectName = ''',\npipeline().parameters.pProjectName,\n'''\n  AND LoadType = ''',\npipeline().parameters.pLoadType,\n'''\nORDER BY LoadOrder'\n)",
 									"type": "Expression"
 								},
 								"queryTimeout": "02:00:00",
@@ -1368,7 +1431,7 @@
 									"type": "IfCondition",
 									"dependsOn": [
 										{
-											"activity": "Execute PL_bronze",
+											"activity": "If Condition2",
 											"dependencyConditions": [
 												"Succeeded"
 											]
@@ -1572,6 +1635,53 @@
 											}
 										]
 									}
+								},
+								{
+									"name": "If Condition2",
+									"type": "IfCondition",
+									"dependsOn": [
+										{
+											"activity": "Execute PL_bronze",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"expression": {
+											"value": "@not(empty(item().DeltaProcName))",
+											"type": "Expression"
+										},
+										"ifTrueActivities": [
+											{
+												"name": "Execute PL_Load_To_Delta_copy2",
+												"type": "ExecutePipeline",
+												"dependsOn": [],
+												"policy": {
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"pipeline": {
+														"referenceName": "PL_Load_To_Delta",
+														"type": "PipelineReference"
+													},
+													"waitOnCompletion": true,
+													"parameters": {
+														"p_load_run_id": {
+															"value": "@pipeline().RunId",
+															"type": "Expression"
+														},
+														"p_procname": {
+															"value": "@item().DeltaProcName",
+															"type": "Expression"
+														}
+													}
+												}
+											}
+										]
+									}
 								}
 							]
 						}
@@ -1606,7 +1716,8 @@
 				"[concat(variables('workspaceId'), '/datasets/DS_DedSQLpool_Table_Param')]",
 				"[concat(variables('workspaceId'), '/sqlPools/dsqlp_dev02')]",
 				"[concat(variables('workspaceId'), '/pipelines/PL_Copy_To_Bronze')]",
-				"[concat(variables('workspaceId'), '/pipelines/PL_Load_To_Silver')]"
+				"[concat(variables('workspaceId'), '/pipelines/PL_Load_To_Silver')]",
+				"[concat(variables('workspaceId'), '/pipelines/PL_Load_To_Delta')]"
 			]
 		},
 		{
@@ -2494,7 +2605,30 @@
 					"name": "test_incremental_load"
 				},
 				"content": {
-					"query": "/*============================================================\n  Ensure schema exists\n============================================================*/\nIF NOT EXISTS (\n    SELECT 1\n    FROM sys.schemas\n    WHERE name = 'config'\n)\nBEGIN\n    EXEC ('CREATE SCHEMA config');\nEND;\nGO\n\n/*============================================================\n  Recreate table\n============================================================*/\nIF OBJECT_ID('config.IngestionConfig', 'U') IS NOT NULL\nBEGIN\n    DROP TABLE config.IngestionConfig;\nEND;\nGO\n\n/*============================================================\n  Create table\n============================================================*/\nCREATE TABLE config.IngestionConfig\n(\n    ConfigId         INT IDENTITY(1,1) NOT NULL,\n    ProjectName      VARCHAR(100) NOT NULL,\n    LoadOrder        INT NOT NULL,\n    LoadType         VARCHAR(50) NOT NULL,   -- FULL / INCREMENTAL\n\n    IsActive         BIT NOT NULL\n        CONSTRAINT DF_IngestionConfig_IsActive DEFAULT (1),\n\n    SourceContainer  VARCHAR(128) NOT NULL,\n    SourceDirectory  VARCHAR(512) NOT NULL,\n    FileName         VARCHAR(512) NOT NULL,\n\n    TargetSchema     VARCHAR(128) NOT NULL,\n    TargetTable      VARCHAR(128) NOT NULL,\n\n    SilverProcName   VARCHAR(256) NULL,\n    EnableSilver     BIT NOT NULL\n        CONSTRAINT DF_IngestionConfig_EnableSilver DEFAULT (1)\n)\nWITH\n(\n    DISTRIBUTION = ROUND_ROBIN,\n    HEAP\n);\nGO\n\n/*============================================================\n  Load config rows\n============================================================*/\nTRUNCATE TABLE config.IngestionConfig;\nGO\n\nINSERT INTO config.IngestionConfig\n(\n    ProjectName,\n    LoadOrder,\n    LoadType,\n    IsActive,\n    SourceContainer,\n    SourceDirectory,\n    FileName,\n    TargetSchema,\n    TargetTable,\n    SilverProcName,\n    EnableSilver\n)\nSELECT 'demo',      1, 'FULL',        1, 'test',     'source', 'customers.csv', 'bronze', 'customers', 'silver.sp_load_customers',      1\nUNION ALL\nSELECT 'demo',      2, 'FULL',        1, 'test',     'source', 'products.csv',  'bronze', 'products',  'silver.sp_load_products',       1\nUNION ALL\nSELECT 'demo',      3, 'FULL',        1, 'test',     'source', 'orders.csv',    'bronze', 'orders',    'silver.sp_load_orders',         1\nUNION ALL\nSELECT 'waittime',  1, 'FULL',        1, 'waittime', 'source', 'patients.csv',  'bronze', 'patients',  'silver.sp_load_patients',       1\nUNION ALL\nSELECT 'waittime',  2, 'FULL',        1, 'waittime', 'source', 'visits.csv',    'bronze', 'visits',    'silver.sp_load_visits',         1\n\nUNION ALL\nSELECT 'demo',      1, 'INCREMENTAL', 1, 'test',     'source', 'customers.csv', 'bronze', 'customers', 'silver.sp_load_customers_inc',  1\nUNION ALL\nSELECT 'demo',      2, 'INCREMENTAL', 1, 'test',     'source', 'products.csv',  'bronze', 'products',  'silver.sp_load_products_inc',   1\nUNION ALL\nSELECT 'demo',      3, 'INCREMENTAL', 1, 'test',     'source', 'orders.csv',    'bronze', 'orders',    'silver.sp_load_orders_inc',     1\nUNION ALL\nSELECT 'waittime',  1, 'INCREMENTAL', 1, 'waittime', 'source', 'patients.csv',  'bronze', 'patients',  'silver.sp_load_patients_inc',   1\nUNION ALL\nSELECT 'waittime',  2, 'INCREMENTAL', 1, 'waittime', 'source', 'visits.csv',    'bronze', 'visits',    'silver.sp_load_visits_inc',     1;\nGO\n\n/*============================================================\n  Check config\n============================================================*/\nSELECT *\nFROM config.IngestionConfig\nORDER BY ProjectName, LoadType, LoadOrder;\nGO\n\n",
+					"query": "/*============================================================\n  Ensure schema exists\n============================================================*/\nIF NOT EXISTS (\n    SELECT 1\n    FROM sys.schemas\n    WHERE name = 'config'\n)\nBEGIN\n    EXEC ('CREATE SCHEMA config');\nEND;\nGO\n\n/*============================================================\n  Recreate table\n============================================================*/\nIF OBJECT_ID('config.IngestionConfig', 'U') IS NOT NULL\nBEGIN\n    DROP TABLE config.IngestionConfig;\nEND;\nGO\n\n/*============================================================\n  Create table\n============================================================*/\nCREATE TABLE config.IngestionConfig\n(\n    ConfigId         INT IDENTITY(1,1) NOT NULL,\n    ProjectName      VARCHAR(100) NOT NULL,\n    LoadOrder        INT NOT NULL,\n    LoadType         VARCHAR(50) NOT NULL,   -- FULL / INCREMENTAL\n\n    IsActive         BIT NOT NULL\n        CONSTRAINT DF_IngestionConfig_IsActive DEFAULT (1),\n\n    SourceContainer  VARCHAR(128) NOT NULL,\n    SourceDirectory  VARCHAR(512) NOT NULL,\n    FileName         VARCHAR(512) NOT NULL,\n\n    TargetSchema     VARCHAR(128) NOT NULL,\n    TargetTable      VARCHAR(128) NOT NULL,\n\n    SilverProcName   VARCHAR(256) NULL,\n    EnableSilver     BIT NOT NULL\n        CONSTRAINT DF_IngestionConfig_EnableSilver DEFAULT (1)\n)\nWITH\n(\n    DISTRIBUTION = ROUND_ROBIN,\n    HEAP\n);\nGO\n\n/*============================================================\n  Load config rows\n============================================================*/\nTRUNCATE TABLE config.IngestionConfig;\nGO\n\nINSERT INTO config.IngestionConfig\n(\n    ProjectName,\n    LoadOrder,\n    LoadType,\n    IsActive,\n    SourceContainer,\n    SourceDirectory,\n    FileName,\n    TargetSchema,\n    TargetTable,\n    SilverProcName,\n    EnableSilver\n)\nSELECT 'demo',      1, 'FULL',        1, 'test',     'source', 'customers.csv', 'bronze', 'customers', 'silver.sp_load_customers',      1\nUNION ALL\nSELECT 'demo',      2, 'FULL',        1, 'test',     'source', 'products.csv',  'bronze', 'products',  'silver.sp_load_products',       1\nUNION ALL\nSELECT 'demo',      3, 'FULL',        1, 'test',     'source', 'orders.csv',    'bronze', 'orders',    'silver.sp_load_orders',         1\nUNION ALL\nSELECT 'waittime',  1, 'FULL',        1, 'waittime', 'source', 'patients.csv',  'bronze', 'patients',  'silver.sp_load_patients',       1\nUNION ALL\nSELECT 'waittime',  2, 'FULL',        1, 'waittime', 'source', 'visits.csv',    'bronze', 'visits',    'silver.sp_load_visits',         1\n\nUNION ALL\nSELECT 'demo',      1, 'INCREMENTAL', 1, 'test',     'source', 'customers.csv', 'bronze', 'customers', 'silver.sp_load_customers_inc',  1\nUNION ALL\nSELECT 'demo',      2, 'INCREMENTAL', 1, 'test',     'source', 'products.csv',  'bronze', 'products',  'silver.sp_load_products_inc',   1\nUNION ALL\nSELECT 'demo',      3, 'INCREMENTAL', 1, 'test',     'source', 'orders.csv',    'bronze', 'orders',    'silver.sp_load_orders_inc',     1\nUNION ALL\nSELECT 'waittime',  1, 'INCREMENTAL', 1, 'waittime', 'source', 'patients.csv',  'bronze', 'patients',  'silver.sp_load_patients_inc',   1\nUNION ALL\nSELECT 'waittime',  2, 'INCREMENTAL', 1, 'waittime', 'source', 'visits.csv',    'bronze', 'visits',    'silver.sp_load_visits_inc',     1;\nGO\n\n/*============================================================\n  Check config\n============================================================*/\nSELECT *\nFROM config.IngestionConfig\nORDER BY ProjectName, LoadType, LoadOrder;\nGO\n\n/*============================================================\n  Watermark column\n============================================================*/\nALTER TABLE config.IngestionConfig\nADD WatermarkColumn VARCHAR(128) NULL;\nGO\n\nUPDATE config.IngestionConfig\nSET WatermarkColumn = 'visit_date'\nWHERE ProjectName = 'waittime'\n  AND LoadType = 'INCREMENTAL'\n  AND TargetTable = 'visits';\n\nUPDATE config.IngestionConfig\nSET WatermarkColumn = 'order_date'\nWHERE ProjectName = 'demo'\n  AND LoadType = 'INCREMENTAL'\n  AND TargetTable = 'orders';\nGO\n\n/*============================================================\nDeltaProcName\n============================================================*/\n\n\nALTER TABLE config.IngestionConfig\nADD DeltaProcName VARCHAR(256) NULL;\nGO\n\nUPDATE config.IngestionConfig\nSET DeltaProcName = 'staging.sp_load_orders_delta'\nWHERE ProjectName = 'demo'\n  AND LoadType = 'INCREMENTAL'\n  AND TargetTable = 'orders';\n\nUPDATE config.IngestionConfig\nSET DeltaProcName = 'staging.sp_load_visits_delta'\nWHERE ProjectName = 'waittime'\n  AND LoadType = 'INCREMENTAL'\n  AND TargetTable = 'visits';\nGO\n\nUPDATE config.IngestionConfig\nSET DeltaProcName = NULL\nWHERE LoadType = 'FULL';\nGO",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "dsqlp_dev02",
+						"poolName": "dsqlp_dev02"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/delta_tables')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"folder": {
+					"name": "test_incremental_load"
+				},
+				"content": {
+					"query": "IF OBJECT_ID('staging.visits_delta', 'U') IS NOT NULL\n    DROP TABLE staging.visits_delta;\nGO\n\nCREATE TABLE staging.visits_delta\n(\n    visit_id        INT           NULL,\n    patient_id      INT           NULL,\n    visit_date      DATE          NULL,\n    source_file     VARCHAR(512)  NULL,\n    load_run_id     VARCHAR(100)  NULL,\n    created_at_utc  DATETIME2     NULL\n)\nWITH\n(\n    DISTRIBUTION = ROUND_ROBIN,\n    HEAP\n);\nGO\n\nIF OBJECT_ID('staging.orders_delta', 'U') IS NOT NULL\n    DROP TABLE staging.orders_delta;\nGO\n\nCREATE TABLE staging.orders_delta\n(\n    order_id        INT           NULL,\n    customer_id     INT           NULL,\n    product_id      INT           NULL,\n    quantity        INT           NULL,\n    order_date      DATE          NULL,\n    source_file     VARCHAR(512)  NULL,\n    load_run_id     VARCHAR(100)  NULL,\n    created_at_utc  DATETIME2     NULL\n)\nWITH\n(\n    DISTRIBUTION = ROUND_ROBIN,\n    HEAP\n);\nGO",
 					"metadata": {
 						"language": "sql"
 					},
@@ -2540,13 +2674,13 @@
 					"name": "test_incremental_load"
 				},
 				"content": {
-					"query": "IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'config')\n    EXEC ('CREATE SCHEMA config');\nGO\n\nIF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'audit')\n    EXEC ('CREATE SCHEMA audit');\nGO\n\nIF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'bronze')\n    EXEC ('CREATE SCHEMA bronze');\nGO\n\nIF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'silver')\n    EXEC ('CREATE SCHEMA silver');\nGO",
+					"query": "IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'config')\n    EXEC ('CREATE SCHEMA config');\nGO\n\nIF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'audit')\n    EXEC ('CREATE SCHEMA audit');\nGO\n\nIF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'bronze')\n    EXEC ('CREATE SCHEMA bronze');\nGO\n\nIF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'silver')\n    EXEC ('CREATE SCHEMA silver');\nGO\n\n\nIF NOT EXISTS\n(\n    SELECT 1\n    FROM sys.schemas\n    WHERE name = 'staging'\n)\nBEGIN\n    EXEC ('CREATE SCHEMA staging');\nEND;\nGO",
 					"metadata": {
 						"language": "sql"
 					},
 					"currentConnection": {
-						"databaseName": "master",
-						"poolName": "Built-in"
+						"databaseName": "dsqlp_dev02",
+						"poolName": "dsqlp_dev02"
 					},
 					"resultLimit": 5000
 				},
@@ -2678,7 +2812,7 @@
 					"name": "test_incremental_load"
 				},
 				"content": {
-					"query": "IF OBJECT_ID('silver.sp_load_customers_inc', 'P') IS NOT NULL\n    DROP PROCEDURE silver.sp_load_customers_inc;\nGO\n\nCREATE PROCEDURE silver.sp_load_customers_inc\n    @load_run_id VARCHAR(100)\nAS\nBEGIN\n    INSERT INTO silver.customers_inc\n    (\n        customer_id,\n        customer_name,\n        city,\n        signup_date,\n        created_at_utc,\n        updated_at_utc,\n        load_run_id\n    )\n    SELECT\n        TRY_CAST(LTRIM(RTRIM(b.customer_id)) AS INT),\n        NULLIF(LTRIM(RTRIM(b.customer_name)), ''),\n        NULLIF(LTRIM(RTRIM(b.city)), ''),\n        TRY_CAST(LTRIM(RTRIM(b.signup_date)) AS DATE),\n        GETUTCDATE(),\n        GETUTCDATE(),\n        @load_run_id\n    FROM bronze.customers b\n    WHERE NOT EXISTS\n    (\n        SELECT 1\n        FROM silver.customers_inc s\n        WHERE s.customer_id = TRY_CAST(LTRIM(RTRIM(b.customer_id)) AS INT)\n    );\nEND;\nGO\n\n\nIF OBJECT_ID('silver.sp_load_products_inc', 'P') IS NOT NULL\n    DROP PROCEDURE silver.sp_load_products_inc;\nGO\n\nCREATE PROCEDURE silver.sp_load_products_inc\n    @load_run_id VARCHAR(100)\nAS\nBEGIN\n    INSERT INTO silver.products_inc\n    (\n        product_id,\n        product_name,\n        category,\n        unit_price,\n        created_at_utc,\n        updated_at_utc,\n        load_run_id\n    )\n    SELECT\n        TRY_CAST(LTRIM(RTRIM(b.product_id)) AS INT),\n        NULLIF(LTRIM(RTRIM(b.product_name)), ''),\n        NULLIF(LTRIM(RTRIM(b.category)), ''),\n        TRY_CAST(LTRIM(RTRIM(b.unit_price)) AS DECIMAL(18,2)),\n        GETUTCDATE(),\n        GETUTCDATE(),\n        @load_run_id\n    FROM bronze.products b\n    WHERE NOT EXISTS\n    (\n        SELECT 1\n        FROM silver.products_inc s\n        WHERE s.product_id = TRY_CAST(LTRIM(RTRIM(b.product_id)) AS INT)\n    );\nEND;\nGO\n\n\nIF OBJECT_ID('silver.sp_load_orders_inc', 'P') IS NOT NULL\n    DROP PROCEDURE silver.sp_load_orders_inc;\nGO\n\nCREATE PROCEDURE silver.sp_load_orders_inc\n    @load_run_id VARCHAR(100)\nAS\nBEGIN\n    INSERT INTO silver.orders_inc\n    (\n        order_id,\n        customer_id,\n        product_id,\n        quantity,\n        order_date,\n        created_at_utc,\n        updated_at_utc,\n        load_run_id\n    )\n    SELECT\n        TRY_CAST(LTRIM(RTRIM(b.order_id)) AS INT),\n        TRY_CAST(LTRIM(RTRIM(b.customer_id)) AS INT),\n        TRY_CAST(LTRIM(RTRIM(b.product_id)) AS INT),\n        TRY_CAST(LTRIM(RTRIM(b.quantity)) AS INT),\n        TRY_CAST(LTRIM(RTRIM(b.order_date)) AS DATE),\n        GETUTCDATE(),\n        GETUTCDATE(),\n        @load_run_id\n    FROM bronze.orders b\n    WHERE NOT EXISTS\n    (\n        SELECT 1\n        FROM silver.orders_inc s\n        WHERE s.order_id = TRY_CAST(LTRIM(RTRIM(b.order_id)) AS INT)\n    );\nEND;\nGO",
+					"query": "IF OBJECT_ID('silver.sp_load_customers_inc', 'P') IS NOT NULL\n    DROP PROCEDURE silver.sp_load_customers_inc;\nGO\n\nCREATE PROCEDURE silver.sp_load_customers_inc\n    @load_run_id VARCHAR(100)\nAS\nBEGIN\n    INSERT INTO silver.customers_inc\n    (\n        customer_id,\n        customer_name,\n        city,\n        signup_date,\n        created_at_utc,\n        updated_at_utc,\n        load_run_id\n    )\n    SELECT\n        TRY_CAST(LTRIM(RTRIM(b.customer_id)) AS INT),\n        NULLIF(LTRIM(RTRIM(b.customer_name)), ''),\n        NULLIF(LTRIM(RTRIM(b.city)), ''),\n        TRY_CAST(LTRIM(RTRIM(b.signup_date)) AS DATE),\n        GETUTCDATE(),\n        GETUTCDATE(),\n        @load_run_id\n    FROM bronze.customers b\n    WHERE NOT EXISTS\n    (\n        SELECT 1\n        FROM silver.customers_inc s\n        WHERE s.customer_id = TRY_CAST(LTRIM(RTRIM(b.customer_id)) AS INT)\n    );\nEND;\nGO\n\n\nIF OBJECT_ID('silver.sp_load_products_inc', 'P') IS NOT NULL\n    DROP PROCEDURE silver.sp_load_products_inc;\nGO\n\nCREATE PROCEDURE silver.sp_load_products_inc\n    @load_run_id VARCHAR(100)\nAS\nBEGIN\n    INSERT INTO silver.products_inc\n    (\n        product_id,\n        product_name,\n        category,\n        unit_price,\n        created_at_utc,\n        updated_at_utc,\n        load_run_id\n    )\n    SELECT\n        TRY_CAST(LTRIM(RTRIM(b.product_id)) AS INT),\n        NULLIF(LTRIM(RTRIM(b.product_name)), ''),\n        NULLIF(LTRIM(RTRIM(b.category)), ''),\n        TRY_CAST(LTRIM(RTRIM(b.unit_price)) AS DECIMAL(18,2)),\n        GETUTCDATE(),\n        GETUTCDATE(),\n        @load_run_id\n    FROM bronze.products b\n    WHERE NOT EXISTS\n    (\n        SELECT 1\n        FROM silver.products_inc s\n        WHERE s.product_id = TRY_CAST(LTRIM(RTRIM(b.product_id)) AS INT)\n    );\nEND;\nGO\n\n\n\nIF OBJECT_ID('silver.sp_load_orders_inc', 'P') IS NOT NULL\n    DROP PROCEDURE silver.sp_load_orders_inc;\nGO\n\nCREATE PROCEDURE silver.sp_load_orders_inc\n    @load_run_id VARCHAR(100)\nAS\nBEGIN\n    INSERT INTO silver.orders_inc\n    (\n        order_id,\n        customer_id,\n        product_id,\n        quantity,\n        order_date,\n        created_at_utc,\n        updated_at_utc,\n        load_run_id\n    )\n    SELECT\n        d.order_id,\n        d.customer_id,\n        d.product_id,\n        d.quantity,\n        d.order_date,\n        GETUTCDATE(),\n        GETUTCDATE(),\n        @load_run_id\n    FROM staging.orders_delta d\n    WHERE NOT EXISTS\n    (\n        SELECT 1\n        FROM silver.orders_inc s\n        WHERE s.order_id = d.order_id\n    );\n\n    UPDATE config.WatermarkControl\n    SET\n        LastProcessedValue =\n        (\n            SELECT MAX(CAST(order_date AS DATETIME2))\n            FROM staging.orders_delta\n        ),\n        LastRunId = @load_run_id,\n        LastUpdatedAtUtc = GETUTCDATE()\n    WHERE ProjectName = 'demo'\n      AND LoadType = 'INCREMENTAL'\n      AND TargetTable = 'orders'\n      AND EXISTS (SELECT 1 FROM staging.orders_delta);\nEND;\nGO",
 					"metadata": {
 						"language": "sql"
 					},
@@ -2770,7 +2904,7 @@
 					"name": "test_incremental_load"
 				},
 				"content": {
-					"query": "IF OBJECT_ID('silver.sp_load_patients_inc', 'P') IS NOT NULL\n    DROP PROCEDURE silver.sp_load_patients_inc;\nGO\n\nCREATE PROCEDURE silver.sp_load_patients_inc\n    @load_run_id VARCHAR(100)\nAS\nBEGIN\n    INSERT INTO silver.patients_inc\n    (\n        patient_id,\n        patient_name,\n        gender,\n        created_at_utc,\n        updated_at_utc,\n        load_run_id\n    )\n    SELECT\n        TRY_CAST(b.patient_id AS INT)                  AS patient_id,\n        NULLIF(LTRIM(RTRIM(b.patient_name)), '')       AS patient_name,\n        NULLIF(LTRIM(RTRIM(b.gender)), '')             AS gender,\n        GETUTCDATE()                                   AS created_at_utc,\n        GETUTCDATE()                                   AS updated_at_utc,\n        @load_run_id                                   AS load_run_id\n    FROM bronze.patients b\n    WHERE NOT EXISTS\n    (\n        SELECT 1\n        FROM silver.patients_inc s\n        WHERE s.patient_id = TRY_CAST(b.patient_id AS INT)\n    );\nEND;\nGO\n\n\nIF OBJECT_ID('silver.sp_load_visits_inc', 'P') IS NOT NULL\n    DROP PROCEDURE silver.sp_load_visits_inc;\nGO\n\nCREATE PROCEDURE silver.sp_load_visits_inc\n    @load_run_id VARCHAR(100)\nAS\nBEGIN\n    INSERT INTO silver.visits_inc\n    (\n        visit_id,\n        patient_id,\n        visit_date,\n        created_at_utc,\n        updated_at_utc,\n        load_run_id\n    )\n    SELECT\n        TRY_CAST(b.visit_id AS INT)                    AS visit_id,\n        TRY_CAST(b.patient_id AS INT)                  AS patient_id,\n        TRY_CAST(b.visit_date AS DATE)                 AS visit_date,\n        GETUTCDATE()                                   AS created_at_utc,\n        GETUTCDATE()                                   AS updated_at_utc,\n        @load_run_id                                   AS load_run_id\n    FROM bronze.visits b\n    WHERE NOT EXISTS\n    (\n        SELECT 1\n        FROM silver.visits_inc s\n        WHERE s.visit_id = TRY_CAST(b.visit_id AS INT)\n    );\nEND;\nGO",
+					"query": "IF OBJECT_ID('silver.sp_load_patients_inc', 'P') IS NOT NULL\n    DROP PROCEDURE silver.sp_load_patients_inc;\nGO\n\nCREATE PROCEDURE silver.sp_load_patients_inc\n    @load_run_id VARCHAR(100)\nAS\nBEGIN\n    INSERT INTO silver.patients_inc\n    (\n        patient_id,\n        patient_name,\n        gender,\n        created_at_utc,\n        updated_at_utc,\n        load_run_id\n    )\n    SELECT\n        TRY_CAST(b.patient_id AS INT)                  AS patient_id,\n        NULLIF(LTRIM(RTRIM(b.patient_name)), '')       AS patient_name,\n        NULLIF(LTRIM(RTRIM(b.gender)), '')             AS gender,\n        GETUTCDATE()                                   AS created_at_utc,\n        GETUTCDATE()                                   AS updated_at_utc,\n        @load_run_id                                   AS load_run_id\n    FROM bronze.patients b\n    WHERE NOT EXISTS\n    (\n        SELECT 1\n        FROM silver.patients_inc s\n        WHERE s.patient_id = TRY_CAST(b.patient_id AS INT)\n    );\nEND;\nGO\n\n\n\nIF OBJECT_ID('silver.sp_load_visits_inc', 'P') IS NOT NULL\n    DROP PROCEDURE silver.sp_load_visits_inc;\nGO\n\nCREATE PROCEDURE silver.sp_load_visits_inc\n    @load_run_id VARCHAR(100)\nAS\nBEGIN\n    INSERT INTO silver.visits_inc\n    (\n        visit_id,\n        patient_id,\n        visit_date,\n        created_at_utc,\n        updated_at_utc,\n        load_run_id\n    )\n    SELECT\n        d.visit_id,\n        d.patient_id,\n        d.visit_date,\n        GETUTCDATE(),\n        GETUTCDATE(),\n        @load_run_id\n    FROM staging.visits_delta d\n    WHERE NOT EXISTS\n    (\n        SELECT 1\n        FROM silver.visits_inc s\n        WHERE s.visit_id = d.visit_id\n    );\n\n    UPDATE config.WatermarkControl\n    SET\n        LastProcessedValue =\n        (\n            SELECT MAX(CAST(visit_date AS DATETIME2))\n            FROM staging.visits_delta\n        ),\n        LastRunId = @load_run_id,\n        LastUpdatedAtUtc = GETUTCDATE()\n    WHERE ProjectName = 'waittime'\n      AND LoadType = 'INCREMENTAL'\n      AND TargetTable = 'visits'\n      AND EXISTS (SELECT 1 FROM staging.visits_delta);\nEND;\nGO",
 					"metadata": {
 						"language": "sql"
 					},
@@ -2785,7 +2919,7 @@
 			"dependsOn": []
 		},
 		{
-			"name": "[concat(parameters('workspaceName'), '/watermark_table')]",
+			"name": "[concat(parameters('workspaceName'), '/sp_staging_delta')]",
 			"type": "Microsoft.Synapse/workspaces/sqlscripts",
 			"apiVersion": "2019-06-01-preview",
 			"properties": {
@@ -2793,7 +2927,30 @@
 					"name": "test_incremental_load"
 				},
 				"content": {
-					"query": "/*============================================================\n  Watermark control table\n============================================================*/\nIF OBJECT_ID('config.WatermarkControl', 'U') IS NOT NULL\n    DROP TABLE config.WatermarkControl;\nGO\n\nCREATE TABLE config.WatermarkControl\n(\n    WatermarkId         INT IDENTITY(1,1) NOT NULL,\n    ProjectName         VARCHAR(100) NOT NULL,\n    LoadType            VARCHAR(50)  NOT NULL,     -- FULL / INCREMENTAL\n    TargetTable         VARCHAR(128) NOT NULL,     -- patients, visits, customers...\n    WatermarkColumn     VARCHAR(128) NOT NULL,     -- visit_date, order_date, etc.\n    LastProcessedValue  DATETIME2    NULL,\n    LastRunId           VARCHAR(100) NULL,\n    LastUpdatedAtUtc    DATETIME2    NULL\n)\nWITH\n(\n    DISTRIBUTION = ROUND_ROBIN,\n    HEAP\n);\nGO",
+					"query": "IF OBJECT_ID('staging.sp_load_visits_delta', 'P') IS NOT NULL\n    DROP PROCEDURE staging.sp_load_visits_delta;\nGO\n\nCREATE PROCEDURE staging.sp_load_visits_delta\n    @load_run_id VARCHAR(100)\nAS\nBEGIN\n    DECLARE @last_watermark DATETIME2;\n\n    SELECT @last_watermark = LastProcessedValue\n    FROM config.WatermarkControl\n    WHERE ProjectName = 'waittime'\n      AND LoadType = 'INCREMENTAL'\n      AND TargetTable = 'visits';\n\n    TRUNCATE TABLE staging.visits_delta;\n\n    INSERT INTO staging.visits_delta\n    (\n        visit_id,\n        patient_id,\n        visit_date,\n        source_file,\n        load_run_id,\n        created_at_utc\n    )\n    SELECT\n        TRY_CAST(LTRIM(RTRIM(b.visit_id)) AS INT)        AS visit_id,\n        TRY_CAST(LTRIM(RTRIM(b.patient_id)) AS INT)      AS patient_id,\n        TRY_CAST(LTRIM(RTRIM(b.visit_date)) AS DATE)     AS visit_date,\n        b.filename                                       AS source_file,\n        @load_run_id                                     AS load_run_id,\n        GETUTCDATE()                                     AS created_at_utc\n    FROM bronze.visits b\n    WHERE\n        @last_watermark IS NULL\n        OR TRY_CAST(LTRIM(RTRIM(b.visit_date)) AS DATETIME2) > @last_watermark;\nEND;\nGO\n\n\nIF OBJECT_ID('staging.sp_load_orders_delta', 'P') IS NOT NULL\n    DROP PROCEDURE staging.sp_load_orders_delta;\nGO\n\nCREATE PROCEDURE staging.sp_load_orders_delta\n    @load_run_id VARCHAR(100)\nAS\nBEGIN\n    DECLARE @last_watermark DATETIME2;\n\n    SELECT @last_watermark = LastProcessedValue\n    FROM config.WatermarkControl\n    WHERE ProjectName = 'demo'\n      AND LoadType = 'INCREMENTAL'\n      AND TargetTable = 'orders';\n\n    TRUNCATE TABLE staging.orders_delta;\n\n    INSERT INTO staging.orders_delta\n    (\n        order_id,\n        customer_id,\n        product_id,\n        quantity,\n        order_date,\n        source_file,\n        load_run_id,\n        created_at_utc\n    )\n    SELECT\n        TRY_CAST(LTRIM(RTRIM(b.order_id)) AS INT)        AS order_id,\n        TRY_CAST(LTRIM(RTRIM(b.customer_id)) AS INT)     AS customer_id,\n        TRY_CAST(LTRIM(RTRIM(b.product_id)) AS INT)      AS product_id,\n        TRY_CAST(LTRIM(RTRIM(b.quantity)) AS INT)        AS quantity,\n        TRY_CAST(LTRIM(RTRIM(b.order_date)) AS DATE)     AS order_date,\n        b.filename                                       AS source_file,\n        @load_run_id                                     AS load_run_id,\n        GETUTCDATE()                                     AS created_at_utc\n    FROM bronze.orders b\n    WHERE\n        @last_watermark IS NULL\n        OR TRY_CAST(LTRIM(RTRIM(b.order_date)) AS DATETIME2) > @last_watermark;\nEND;\nGO",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "dsqlp_dev02",
+						"poolName": "dsqlp_dev02"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/watermark')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"folder": {
+					"name": "test_incremental_load"
+				},
+				"content": {
+					"query": "/*============================================================\n  Watermark control table\n============================================================*/\nIF OBJECT_ID('config.WatermarkControl', 'U') IS NOT NULL\n    DROP TABLE config.WatermarkControl;\nGO\n\nCREATE TABLE config.WatermarkControl\n(\n    WatermarkId         INT IDENTITY(1,1) NOT NULL,\n    ProjectName         VARCHAR(100) NOT NULL,\n    LoadType            VARCHAR(50)  NOT NULL,     -- FULL / INCREMENTAL\n    TargetTable         VARCHAR(128) NOT NULL,     -- patients, visits, customers...\n    WatermarkColumn     VARCHAR(128) NOT NULL,     -- visit_date, order_date, etc.\n    LastProcessedValue  DATETIME2    NULL,\n    LastRunId           VARCHAR(100) NULL,\n    LastUpdatedAtUtc    DATETIME2    NULL\n)\nWITH\n(\n    DISTRIBUTION = ROUND_ROBIN,\n    HEAP\n);\nGO\n\nINSERT INTO config.WatermarkControl\n(\n    ProjectName,\n    LoadType,\n    TargetTable,\n    WatermarkColumn,\n    LastProcessedValue,\n    LastRunId,\n    LastUpdatedAtUtc\n)\nSELECT 'waittime', 'INCREMENTAL', 'visits', 'visit_date', NULL, NULL, NULL\nUNION ALL\nSELECT 'demo', 'INCREMENTAL', 'orders', 'order_date', NULL, NULL, NULL;\nGO\n\n",
 					"metadata": {
 						"language": "sql"
 					},
