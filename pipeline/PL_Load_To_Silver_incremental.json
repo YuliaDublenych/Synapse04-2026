@@ -1,5 +1,5 @@
 {
-	"name": "PL_Load_To_Silver",
+	"name": "PL_Load_To_Silver_incremental",
 	"properties": {
 		"activities": [
 			{
@@ -48,7 +48,7 @@
 			}
 		},
 		"folder": {
-			"name": "test_full_load"
+			"name": "test_incremental_load"
 		},
 		"annotations": [],
 		"lastPublishTime": "2026-04-05T19:20:56Z"

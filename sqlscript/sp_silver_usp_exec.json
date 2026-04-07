@@ -2,7 +2,7 @@
 	"name": "sp_silver_usp_exec",
 	"properties": {
 		"folder": {
-			"name": "test"
+			"name": "test_full_load"
 		},
 		"content": {
 			"query": "IF OBJECT_ID('silver.usp_exec', 'P') IS NOT NULL\n    DROP PROCEDURE silver.usp_exec;\nGO\n\nCREATE PROCEDURE silver.usp_exec\n    @load_run_id NVARCHAR(100),\n    @procname NVARCHAR(256)\nAS\nBEGIN\n    DECLARE @sql NVARCHAR(MAX);\n\n    IF @procname IS NULL OR LTRIM(RTRIM(@procname)) = ''\n    BEGIN\n        RAISERROR('procname is required', 16, 1);\n    END\n    ELSE\n    BEGIN\n        SET @sql =\n            N'EXEC ' +\n            QUOTENAME(PARSENAME(@procname, 2)) + N'.' +\n            QUOTENAME(PARSENAME(@procname, 1)) +\n            N' @load_run_id = @p_load_run_id';\n\n        EXEC sp_executesql\n            @sql,\n            N'@p_load_run_id NVARCHAR(100)',\n            @p_load_run_id = @load_run_id;\n    END\nEND;\nGO",

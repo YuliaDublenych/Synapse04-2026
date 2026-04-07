@@ -1,5 +1,5 @@
 {
-	"name": "PL_Copy_To_Bronze_copy1",
+	"name": "PL_Copy_to_bronze_incremental",
 	"properties": {
 		"activities": [
 			{
@@ -81,18 +81,9 @@
 						"referenceName": "DS_ADLS_CSV_Param",
 						"type": "DatasetReference",
 						"parameters": {
-							"pContainer": {
-								"value": "@pipeline().parameters.p_SourceContainer",
-								"type": "Expression"
-							},
-							"pDirectory": {
-								"value": "@pipeline().parameters.p_SourceDirectory",
-								"type": "Expression"
-							},
-							"pFileName": {
-								"value": "@pipeline().parameters.p_FileName",
-								"type": "Expression"
-							}
+							"pContainer": "@pipeline().parameters.p_SourceContainer",
+							"pDirectory": "@pipeline().parameters.p_SourceDirectory",
+							"pFileName": "@pipeline().parameters.p_FileName"
 						}
 					}
 				],
@@ -101,10 +92,7 @@
 						"referenceName": "DS_DedSQLpool_Table_Param",
 						"type": "DatasetReference",
 						"parameters": {
-							"pSchema": {
-								"value": "@pipeline().parameters.p_TargetSchema",
-								"type": "Expression"
-							},
+							"pSchema": "@pipeline().parameters.p_TargetSchema",
 							"pTable": {
 								"value": "@pipeline().parameters.p_TargetTable",
 								"type": "Expression"
@@ -132,10 +120,10 @@
 			}
 		},
 		"folder": {
-			"name": "test_full_load"
+			"name": "test_incremental_load"
 		},
 		"annotations": [],
-		"lastPublishTime": "2026-04-05T23:09:16Z"
+		"lastPublishTime": "2026-04-05T18:36:55Z"
 	},
 	"type": "Microsoft.Synapse/workspaces/pipelines"
 }

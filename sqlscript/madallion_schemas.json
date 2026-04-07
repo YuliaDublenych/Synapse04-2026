@@ -2,7 +2,7 @@
 	"name": "madallion_schemas",
 	"properties": {
 		"folder": {
-			"name": "test"
+			"name": "test_full_load"
 		},
 		"content": {
 			"query": "IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'config')\n    EXEC ('CREATE SCHEMA config');\nGO\n\nIF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'audit')\n    EXEC ('CREATE SCHEMA audit');\nGO\n\nIF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'bronze')\n    EXEC ('CREATE SCHEMA bronze');\nGO\n\nIF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'silver')\n    EXEC ('CREATE SCHEMA silver');\nGO",
