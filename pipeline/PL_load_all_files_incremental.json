@@ -18,7 +18,7 @@
 					"source": {
 						"type": "SqlDWSource",
 						"sqlReaderQuery": {
-							"value": "@concat(\n'SELECT\n    ConfigId,\n    ProjectName,\n    LoadOrder,\n    SourceContainer,\n    SourceDirectory,\n    FileName,\n    TargetSchema,\n    TargetTable,\n    SilverProcName,\n    EnableSilver\nFROM config.IngestionConfig\nWHERE IsActive = 1\n  AND ProjectName = ''',\npipeline().parameters.pProjectName,\n'''\nORDER BY LoadOrder'\n)",
+							"value": "@concat(\n'SELECT\n    ConfigId,\n    ProjectName,\n    LoadOrder,\n    LoadType,\n    SourceContainer,\n    SourceDirectory,\n    FileName,\n    TargetSchema,\n    TargetTable,\n    SilverProcName,\n    EnableSilver\nFROM config.IngestionConfig\nWHERE IsActive = 1\n  AND ProjectName = ''',\npipeline().parameters.pProjectName,\n'''\n  AND LoadType = ''',\npipeline().parameters.pLoadType,\n'''\nORDER BY LoadOrder'\n)",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
@@ -477,6 +477,9 @@
 		],
 		"parameters": {
 			"pProjectName": {
+				"type": "string"
+			},
+			"pLoadType": {
 				"type": "string"
 			}
 		},

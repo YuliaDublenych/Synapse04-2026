@@ -1,0 +1,20 @@
+{
+	"name": "audit_ddl_inc",
+	"properties": {
+		"folder": {
+			"name": "test_incremental_load"
+		},
+		"content": {
+			"query": "/*============================================================\n  Ensure schema exists\n============================================================*/\nIF NOT EXISTS (\n    SELECT 1\n    FROM sys.schemas\n    WHERE name = 'audit'\n)\nBEGIN\n    EXEC ('CREATE SCHEMA audit');\nEND;\nGO\n\n/*============================================================\n  Recreate audit table\n============================================================*/\nIF OBJECT_ID('audit.PipelineRun', 'U') IS NOT NULL\nBEGIN\n    DROP TABLE audit.PipelineRun;\nEND;\nGO\n\nCREATE TABLE audit.PipelineRun\n(\n    AuditId         BIGINT IDENTITY(1,1) NOT NULL,\n    PipelineName    VARCHAR(200)  NOT NULL,\n    PipelineRunId   VARCHAR(64)   NOT NULL,\n    ConfigId        INT           NOT NULL,\n    FileName        VARCHAR(512)  NULL,\n    TargetTable     VARCHAR(256)  NULL,\n    StartTime       DATETIME2(3)  NOT NULL,\n    EndTime         DATETIME2(3)  NULL,\n    Status          VARCHAR(30)   NOT NULL,\n    RowsCopied      BIGINT        NULL,\n    ErrorMessage    VARCHAR(4000) NULL\n)\nWITH\n(\n    DISTRIBUTION = ROUND_ROBIN,\n    HEAP\n);\nGO\n\n/*============================================================\n  Start proc\n============================================================*/\nIF OBJECT_ID('audit.sp_start_run', 'P') IS NOT NULL\nBEGIN\n    DROP PROCEDURE audit.sp_start_run;\nEND;\nGO\n\nCREATE PROCEDURE audit.sp_start_run\n    @PipelineName   VARCHAR(200),\n    @PipelineRunId  VARCHAR(64),\n    @ConfigId       INT,\n    @FileName       VARCHAR(512),\n    @TargetTable    VARCHAR(256)\nAS\nBEGIN\n    INSERT INTO audit.PipelineRun\n    (\n        PipelineName,\n        PipelineRunId,\n        ConfigId,\n        FileName,\n        TargetTable,\n        StartTime,\n        Status\n    )\n    SELECT\n        @PipelineName,\n        @PipelineRunId,\n        @ConfigId,\n        @FileName,\n        @TargetTable,\n        SYSDATETIME(),\n        'Started';\nEND;\nGO\n\n\n/*============================================================\n  End proc\n============================================================*/\nIF OBJECT_ID('audit.sp_end_run', 'P') IS NOT NULL\nBEGIN\n    DROP PROCEDURE audit.sp_end_run;\nEND;\nGO\n\nCREATE PROCEDURE audit.sp_end_run\n    @PipelineRunId  VARCHAR(64),\n    @ConfigId       INT,\n    @Status         VARCHAR(30),\n    @RowsCopied     BIGINT,\n    @ErrorMessage   VARCHAR(4000)\nAS\nBEGIN\n    UPDATE audit.PipelineRun\n       SET EndTime      = SYSDATETIME(),\n           Status       = @Status,\n           RowsCopied   = @RowsCopied,\n           ErrorMessage = @ErrorMessage\n     WHERE PipelineRunId = @PipelineRunId\n       AND ConfigId      = @ConfigId\n       AND EndTime IS NULL;\nEND;\nGO",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "dsqlp_dev02",
+				"poolName": "dsqlp_dev02"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}
