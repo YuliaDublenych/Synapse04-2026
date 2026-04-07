@@ -17,7 +17,10 @@
 				"typeProperties": {
 					"source": {
 						"type": "SqlDWSource",
-						"sqlReaderQuery": "SELECT\n    ConfigId,\n    SourceContainer,\n    SourceDirectory,\n    FileName,\n    TargetSchema,\n    TargetTable,\n    SilverProcName,\n    EnableSilver\nFROM config.IngestionConfig\nWHERE IsActive = 1\nORDER BY ConfigId;",
+						"sqlReaderQuery": {
+							"value": "@concat(\n'SELECT\n    ConfigId,\n    ProjectName,\n    LoadOrder,\n    SourceContainer,\n    SourceDirectory,\n    FileName,\n    TargetSchema,\n    TargetTable,\n    SilverProcName,\n    EnableSilver\nFROM config.IngestionConfig\nWHERE IsActive = 1\n  AND ProjectName = ''',\npipeline().parameters.pProjectName,\n'''\nORDER BY LoadOrder'\n)",
+							"type": "Expression"
+						},
 						"queryTimeout": "02:00:00",
 						"partitionOption": "None"
 					},
@@ -49,7 +52,7 @@
 						"value": "@activity('Lookup_Config').output.value",
 						"type": "Expression"
 					},
-					"isSequential": false,
+					"isSequential": true,
 					"activities": [
 						{
 							"name": "SP_Start_Run",
@@ -85,7 +88,7 @@
 										"type": "String"
 									},
 									"PipelineName": {
-										"value": "PL_load_all_files",
+										"value": "@pipeline().Pipeline",
 										"type": "String"
 									},
 									"PipelineRunId": {
@@ -177,7 +180,7 @@
 										"type": "Expression"
 									},
 									"p_procname": {
-										"value": "@concat('silver.sp_load_', item().TargetTable)",
+										"value": "@item().SilverProcName",
 										"type": "Expression"
 									}
 								}
@@ -186,6 +189,8 @@
 						{
 							"name": "SP_End_Run_Fail_bronze",
 							"type": "SqlPoolStoredProcedure",
+							"state": "Inactive",
+							"onInactiveMarkAs": "Succeeded",
 							"dependsOn": [
 								{
 									"activity": "Execute PL_bronze",
@@ -244,6 +249,8 @@
 						{
 							"name": "SP_End_Run_Fail_silver",
 							"type": "SqlPoolStoredProcedure",
+							"state": "Inactive",
+							"onInactiveMarkAs": "Succeeded",
 							"dependsOn": [
 								{
 									"activity": "Execute PL_Load_To_Silver",
@@ -302,6 +309,8 @@
 						{
 							"name": "SP_End_Run_Success_silver",
 							"type": "SqlPoolStoredProcedure",
+							"state": "Inactive",
+							"onInactiveMarkAs": "Succeeded",
 							"dependsOn": [
 								{
 									"activity": "Execute PL_Load_To_Silver",
@@ -358,6 +367,11 @@
 				}
 			}
 		],
+		"parameters": {
+			"pProjectName": {
+				"type": "string"
+			}
+		},
 		"folder": {
 			"name": "test"
 		},
