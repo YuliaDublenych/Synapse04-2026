@@ -1,0 +1,24 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"workspaceName": {
+			"value": "synw-ohcwm-dev"
+		},
+		"synw-ohcwm-dev-WorkspaceDefaultSqlServer_connectionString": {
+			"value": "Integrated Security=False;Encrypt=True;Connection Timeout=30;Data Source=tcp:synw-ohcwm-dev.sql.azuresynapse.net,1433;Initial Catalog=@{linkedService().DBName}"
+		},
+		"ls_adls_source_properties_typeProperties_url": {
+			"value": "https://adlsohcwmfree01.dfs.core.windows.net/"
+		},
+		"ls_sql_dedicated_dev_properties_typeProperties_server": {
+			"value": "synw-ohcwm-dev.sql.azuresynapse.net"
+		},
+		"ls_sql_dedicated_dev_properties_typeProperties_database": {
+			"value": "dsqlp_dev02"
+		},
+		"synw-ohcwm-dev-WorkspaceDefaultStorage_properties_typeProperties_url": {
+			"value": "https://adlsohcwmfree01.dfs.core.windows.net"
+		}
+	}
+}
