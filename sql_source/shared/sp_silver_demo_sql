@@ -3,6 +3,7 @@ IF OBJECT_ID('silver.sp_load_customers', 'P') IS NOT NULL
 GO
 
 CREATE PROCEDURE silver.sp_load_customers
+    @load_run_id VARCHAR(100)
 AS
 BEGIN
     TRUNCATE TABLE silver.customers;
@@ -15,20 +16,21 @@ BEGIN
         signup_date
     )
     SELECT
-        TRY_CAST(LTRIM(RTRIM(customer_id)) AS INT),
-        LTRIM(RTRIM(customer_name)),
-        NULLIF(LTRIM(RTRIM(city)), ''),
-        TRY_CAST(LTRIM(RTRIM(signup_date)) AS DATE)
-    FROM bronze.customers
-    WHERE TRY_CAST(LTRIM(RTRIM(customer_id)) AS INT) IS NOT NULL;
+        TRY_CAST(LTRIM(RTRIM(customer_id)) AS INT)            AS customer_id,
+        LTRIM(RTRIM(customer_name))                           AS customer_name,
+        NULLIF(LTRIM(RTRIM(city)), '')                        AS city,
+        TRY_CAST(LTRIM(RTRIM(signup_date)) AS DATE)           AS signup_date
+    FROM bronze.customers;
 END;
 GO
+
 
 IF OBJECT_ID('silver.sp_load_products', 'P') IS NOT NULL
     DROP PROCEDURE silver.sp_load_products;
 GO
 
 CREATE PROCEDURE silver.sp_load_products
+    @load_run_id VARCHAR(100)
 AS
 BEGIN
     TRUNCATE TABLE silver.products;
@@ -41,20 +43,21 @@ BEGIN
         unit_price
     )
     SELECT
-        TRY_CAST(LTRIM(RTRIM(product_id)) AS INT),
-        LTRIM(RTRIM(product_name)),
-        NULLIF(LTRIM(RTRIM(category)), ''),
-        TRY_CAST(LTRIM(RTRIM(unit_price)) AS DECIMAL(18,2))
-    FROM bronze.products
-    WHERE TRY_CAST(LTRIM(RTRIM(product_id)) AS INT) IS NOT NULL;
+        TRY_CAST(LTRIM(RTRIM(product_id)) AS INT)             AS product_id,
+        LTRIM(RTRIM(product_name))                            AS product_name,
+        NULLIF(LTRIM(RTRIM(category)), '')                    AS category,
+        TRY_CAST(LTRIM(RTRIM(unit_price)) AS DECIMAL(18,2))   AS unit_price
+    FROM bronze.products;
 END;
 GO
+
 
 IF OBJECT_ID('silver.sp_load_orders', 'P') IS NOT NULL
     DROP PROCEDURE silver.sp_load_orders;
 GO
 
 CREATE PROCEDURE silver.sp_load_orders
+    @load_run_id VARCHAR(100)
 AS
 BEGIN
     TRUNCATE TABLE silver.orders;
@@ -68,12 +71,11 @@ BEGIN
         order_date
     )
     SELECT
-        TRY_CAST(LTRIM(RTRIM(order_id)) AS INT),
-        TRY_CAST(LTRIM(RTRIM(customer_id)) AS INT),
-        TRY_CAST(LTRIM(RTRIM(product_id)) AS INT),
-        TRY_CAST(LTRIM(RTRIM(quantity)) AS INT),
-        TRY_CAST(LTRIM(RTRIM(order_date)) AS DATE)
-    FROM bronze.orders
-    WHERE TRY_CAST(LTRIM(RTRIM(order_id)) AS INT) IS NOT NULL;
+        TRY_CAST(LTRIM(RTRIM(order_id)) AS INT)               AS order_id,
+        TRY_CAST(LTRIM(RTRIM(customer_id)) AS INT)            AS customer_id,
+        TRY_CAST(LTRIM(RTRIM(product_id)) AS INT)             AS product_id,
+        TRY_CAST(LTRIM(RTRIM(quantity)) AS INT)               AS quantity,
+        TRY_CAST(LTRIM(RTRIM(order_date)) AS DATE)            AS order_date
+    FROM bronze.orders;
 END;
 GO
