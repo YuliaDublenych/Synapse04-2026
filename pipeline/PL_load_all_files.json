@@ -57,7 +57,20 @@
 						{
 							"name": "SP_Start_Run",
 							"type": "SqlPoolStoredProcedure",
-							"dependsOn": [],
+							"dependsOn": [
+								{
+									"activity": "Set source container",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								},
+								{
+									"activity": "Set Enablesilver",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
 							"policy": {
 								"timeout": "0.12:00:00",
 								"retry": 0,
@@ -154,43 +167,8 @@
 							}
 						},
 						{
-							"name": "Execute PL_Load_To_Silver",
-							"type": "ExecutePipeline",
-							"dependsOn": [
-								{
-									"activity": "Execute PL_bronze",
-									"dependencyConditions": [
-										"Succeeded"
-									]
-								}
-							],
-							"policy": {
-								"secureInput": false
-							},
-							"userProperties": [],
-							"typeProperties": {
-								"pipeline": {
-									"referenceName": "PL_Load_To_Silver",
-									"type": "PipelineReference"
-								},
-								"waitOnCompletion": true,
-								"parameters": {
-									"p_load_run_id": {
-										"value": "@pipeline().RunId",
-										"type": "Expression"
-									},
-									"p_procname": {
-										"value": "@item().SilverProcName",
-										"type": "Expression"
-									}
-								}
-							}
-						},
-						{
 							"name": "SP_End_Run_Fail_bronze",
 							"type": "SqlPoolStoredProcedure",
-							"state": "Inactive",
-							"onInactiveMarkAs": "Succeeded",
 							"dependsOn": [
 								{
 									"activity": "Execute PL_bronze",
@@ -247,120 +225,247 @@
 							}
 						},
 						{
-							"name": "SP_End_Run_Fail_silver",
-							"type": "SqlPoolStoredProcedure",
-							"state": "Inactive",
-							"onInactiveMarkAs": "Succeeded",
-							"dependsOn": [
-								{
-									"activity": "Execute PL_Load_To_Silver",
-									"dependencyConditions": [
-										"Failed"
-									]
-								}
-							],
+							"name": "Set source container",
+							"type": "SetVariable",
+							"dependsOn": [],
 							"policy": {
-								"timeout": "0.12:00:00",
-								"retry": 0,
-								"retryIntervalInSeconds": 30,
 								"secureOutput": false,
 								"secureInput": false
 							},
 							"userProperties": [],
-							"sqlPool": {
-								"referenceName": "dsqlp_dev02",
-								"type": "SqlPoolReference"
-							},
 							"typeProperties": {
-								"storedProcedureName": "[audit].[sp_end_run]",
-								"storedProcedureParameters": {
-									"ConfigId": {
-										"value": {
-											"value": "@item().ConfigId",
-											"type": "Expression"
-										},
-										"type": "Int32"
-									},
-									"ErrorMessage": {
-										"value": {
-											"value": "@string(activity('Execute PL_Load_To_Silver').error.message)",
-											"type": "Expression"
-										},
-										"type": "String"
-									},
-									"PipelineRunId": {
-										"value": {
-											"value": "@pipeline().RunId",
-											"type": "Expression"
-										},
-										"type": "String"
-									},
-									"RowsCopied": {
-										"value": null,
-										"type": "Int64"
-									},
-									"Status": {
-										"value": "Failed",
-										"type": "String"
-									}
+								"variableName": "sourcecontainer",
+								"value": {
+									"value": "@item().SourceContainer",
+									"type": "Expression"
 								}
 							}
 						},
 						{
-							"name": "SP_End_Run_Success_silver",
-							"type": "SqlPoolStoredProcedure",
-							"state": "Inactive",
-							"onInactiveMarkAs": "Succeeded",
+							"name": "Set Enablesilver",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "enablesilver",
+								"value": {
+									"value": "@item().EnableSilver",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "If Condition1",
+							"type": "IfCondition",
 							"dependsOn": [
 								{
-									"activity": "Execute PL_Load_To_Silver",
+									"activity": "Execute PL_bronze",
 									"dependencyConditions": [
 										"Succeeded"
 									]
 								}
 							],
-							"policy": {
-								"timeout": "0.12:00:00",
-								"retry": 0,
-								"retryIntervalInSeconds": 30,
-								"secureOutput": false,
-								"secureInput": false
-							},
 							"userProperties": [],
-							"sqlPool": {
-								"referenceName": "dsqlp_dev02",
-								"type": "SqlPoolReference"
-							},
 							"typeProperties": {
-								"storedProcedureName": "[audit].[sp_end_run]",
-								"storedProcedureParameters": {
-									"ConfigId": {
-										"value": {
-											"value": "@item().ConfigId",
-											"type": "Expression"
+								"expression": {
+									"value": "@variables('enablesilver')",
+									"type": "Expression"
+								},
+								"ifFalseActivities": [
+									{
+										"name": "SP_End_Run_Success_silver_copy1",
+										"type": "SqlPoolStoredProcedure",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
 										},
-										"type": "Int32"
-									},
-									"ErrorMessage": {
-										"value": null,
-										"type": "String"
-									},
-									"PipelineRunId": {
-										"value": {
-											"value": "@pipeline().RunId",
-											"type": "Expression"
+										"userProperties": [],
+										"sqlPool": {
+											"referenceName": "dsqlp_dev02",
+											"type": "SqlPoolReference"
 										},
-										"type": "String"
-									},
-									"RowsCopied": {
-										"value": null,
-										"type": "Int64"
-									},
-									"Status": {
-										"value": "Succeeded",
-										"type": "String"
+										"typeProperties": {
+											"storedProcedureName": "[audit].[sp_end_run]",
+											"storedProcedureParameters": {
+												"ConfigId": {
+													"value": {
+														"value": "@item().ConfigId",
+														"type": "Expression"
+													},
+													"type": "Int32"
+												},
+												"ErrorMessage": {
+													"value": null,
+													"type": "String"
+												},
+												"PipelineRunId": {
+													"value": {
+														"value": "@pipeline().RunId",
+														"type": "Expression"
+													},
+													"type": "String"
+												},
+												"RowsCopied": {
+													"value": null,
+													"type": "Int64"
+												},
+												"Status": {
+													"value": "Succeeded",
+													"type": "String"
+												}
+											}
+										}
 									}
-								}
+								],
+								"ifTrueActivities": [
+									{
+										"name": "Execute PL_Load_To_Silver",
+										"type": "ExecutePipeline",
+										"dependsOn": [],
+										"policy": {
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"pipeline": {
+												"referenceName": "PL_Load_To_Silver",
+												"type": "PipelineReference"
+											},
+											"waitOnCompletion": true,
+											"parameters": {
+												"p_load_run_id": {
+													"value": "@pipeline().RunId",
+													"type": "Expression"
+												},
+												"p_procname": {
+													"value": "@item().SilverProcName",
+													"type": "Expression"
+												}
+											}
+										}
+									},
+									{
+										"name": "SP_End_Run_Fail_silver",
+										"type": "SqlPoolStoredProcedure",
+										"dependsOn": [
+											{
+												"activity": "Execute PL_Load_To_Silver",
+												"dependencyConditions": [
+													"Failed"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"sqlPool": {
+											"referenceName": "dsqlp_dev02",
+											"type": "SqlPoolReference"
+										},
+										"typeProperties": {
+											"storedProcedureName": "[audit].[sp_end_run]",
+											"storedProcedureParameters": {
+												"ConfigId": {
+													"value": {
+														"value": "@item().ConfigId",
+														"type": "Expression"
+													},
+													"type": "Int32"
+												},
+												"ErrorMessage": {
+													"value": {
+														"value": "@string(activity('Execute PL_Load_To_Silver').error.message)",
+														"type": "Expression"
+													},
+													"type": "String"
+												},
+												"PipelineRunId": {
+													"value": {
+														"value": "@pipeline().RunId",
+														"type": "Expression"
+													},
+													"type": "String"
+												},
+												"RowsCopied": {
+													"value": null,
+													"type": "Int64"
+												},
+												"Status": {
+													"value": "Failed",
+													"type": "String"
+												}
+											}
+										}
+									},
+									{
+										"name": "SP_End_Run_Success_silver",
+										"type": "SqlPoolStoredProcedure",
+										"dependsOn": [
+											{
+												"activity": "Execute PL_Load_To_Silver",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"sqlPool": {
+											"referenceName": "dsqlp_dev02",
+											"type": "SqlPoolReference"
+										},
+										"typeProperties": {
+											"storedProcedureName": "[audit].[sp_end_run]",
+											"storedProcedureParameters": {
+												"ConfigId": {
+													"value": {
+														"value": "@item().ConfigId",
+														"type": "Expression"
+													},
+													"type": "Int32"
+												},
+												"ErrorMessage": {
+													"value": null,
+													"type": "String"
+												},
+												"PipelineRunId": {
+													"value": {
+														"value": "@pipeline().RunId",
+														"type": "Expression"
+													},
+													"type": "String"
+												},
+												"RowsCopied": {
+													"value": null,
+													"type": "Int64"
+												},
+												"Status": {
+													"value": "Succeeded",
+													"type": "String"
+												}
+											}
+										}
+									}
+								]
 							}
 						}
 					]
@@ -370,6 +475,14 @@
 		"parameters": {
 			"pProjectName": {
 				"type": "string"
+			}
+		},
+		"variables": {
+			"sourcecontainer": {
+				"type": "String"
+			},
+			"enablesilver": {
+				"type": "Boolean"
 			}
 		},
 		"folder": {
