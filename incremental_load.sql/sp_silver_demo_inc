@@ -1,0 +1,126 @@
+IF OBJECT_ID('silver.sp_load_customers_inc', 'P') IS NOT NULL
+    DROP PROCEDURE silver.sp_load_customers_inc;
+GO
+
+CREATE PROCEDURE silver.sp_load_customers_inc
+    @load_run_id VARCHAR(100)
+AS
+BEGIN
+    INSERT INTO silver.customers_inc
+    (
+        customer_id,
+        customer_name,
+        city,
+        signup_date,
+        created_at_utc,
+        updated_at_utc,
+        load_run_id
+    )
+    SELECT
+        TRY_CAST(LTRIM(RTRIM(b.customer_id)) AS INT),
+        NULLIF(LTRIM(RTRIM(b.customer_name)), ''),
+        NULLIF(LTRIM(RTRIM(b.city)), ''),
+        TRY_CAST(LTRIM(RTRIM(b.signup_date)) AS DATE),
+        GETUTCDATE(),
+        GETUTCDATE(),
+        @load_run_id
+    FROM bronze.customers b
+    WHERE NOT EXISTS
+    (
+        SELECT 1
+        FROM silver.customers_inc s
+        WHERE s.customer_id = TRY_CAST(LTRIM(RTRIM(b.customer_id)) AS INT)
+    );
+END;
+GO
+
+
+IF OBJECT_ID('silver.sp_load_products_inc', 'P') IS NOT NULL
+    DROP PROCEDURE silver.sp_load_products_inc;
+GO
+
+CREATE PROCEDURE silver.sp_load_products_inc
+    @load_run_id VARCHAR(100)
+AS
+BEGIN
+    INSERT INTO silver.products_inc
+    (
+        product_id,
+        product_name,
+        category,
+        unit_price,
+        created_at_utc,
+        updated_at_utc,
+        load_run_id
+    )
+    SELECT
+        TRY_CAST(LTRIM(RTRIM(b.product_id)) AS INT),
+        NULLIF(LTRIM(RTRIM(b.product_name)), ''),
+        NULLIF(LTRIM(RTRIM(b.category)), ''),
+        TRY_CAST(LTRIM(RTRIM(b.unit_price)) AS DECIMAL(18,2)),
+        GETUTCDATE(),
+        GETUTCDATE(),
+        @load_run_id
+    FROM bronze.products b
+    WHERE NOT EXISTS
+    (
+        SELECT 1
+        FROM silver.products_inc s
+        WHERE s.product_id = TRY_CAST(LTRIM(RTRIM(b.product_id)) AS INT)
+    );
+END;
+GO
+
+
+
+IF OBJECT_ID('silver.sp_load_orders_inc', 'P') IS NOT NULL
+    DROP PROCEDURE silver.sp_load_orders_inc;
+GO
+
+CREATE PROCEDURE silver.sp_load_orders_inc
+    @load_run_id VARCHAR(100)
+AS
+BEGIN
+    INSERT INTO silver.orders_inc
+    (
+        order_id,
+        customer_id,
+        product_id,
+        quantity,
+        order_date,
+        created_at_utc,
+        updated_at_utc,
+        load_run_id
+    )
+    SELECT
+        d.order_id,
+        d.customer_id,
+        d.product_id,
+        d.quantity,
+        d.order_date,
+        GETUTCDATE(),
+        GETUTCDATE(),
+        @load_run_id
+    FROM staging.orders_delta d
+    WHERE NOT EXISTS
+    (
+        SELECT 1
+        FROM silver.orders_inc s
+        WHERE s.order_id = d.order_id
+    );
+
+    UPDATE config.WatermarkControl
+    SET
+        LastProcessedValue =
+        (
+            SELECT MAX(CAST(order_date AS DATETIME2))
+            FROM staging.orders_delta
+        ),
+        LastRunId = @load_run_id,
+        LastUpdatedAtUtc = GETUTCDATE()
+    WHERE ProjectName = 'demo'
+      AND LoadType = 'INCREMENTAL'
+      AND TargetTable = 'orders'
+      AND EXISTS (SELECT 1 FROM staging.orders_delta);
+END;
+GO
