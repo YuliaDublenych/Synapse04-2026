@@ -1,0 +1,67 @@
+/*============================================================
+  Recreate incremental silver tables for demo project
+============================================================*/
+
+IF OBJECT_ID('silver.customers_inc', 'U') IS NOT NULL
+    DROP TABLE silver.customers_inc;
+GO
+
+CREATE TABLE silver.customers_inc
+(
+    customer_id      INT           NULL,
+    customer_name    VARCHAR(200)  NULL,
+    city             VARCHAR(100)  NULL,
+    signup_date      DATE          NULL,
+    created_at_utc   DATETIME2     NULL,
+    updated_at_utc   DATETIME2     NULL,
+    load_run_id      VARCHAR(100)  NULL
+)
+WITH
+(
+    DISTRIBUTION = ROUND_ROBIN,
+    HEAP
+);
+GO
+
+IF OBJECT_ID('silver.products_inc', 'U') IS NOT NULL
+    DROP TABLE silver.products_inc;
+GO
+
+CREATE TABLE silver.products_inc
+(
+    product_id       INT            NULL,
+    product_name     VARCHAR(200)   NULL,
+    category         VARCHAR(100)   NULL,
+    unit_price       DECIMAL(18,2)  NULL,
+    created_at_utc   DATETIME2      NULL,
+    updated_at_utc   DATETIME2      NULL,
+    load_run_id      VARCHAR(100)   NULL
+)
+WITH
+(
+    DISTRIBUTION = ROUND_ROBIN,
+    HEAP
+);
+GO
+
+IF OBJECT_ID('silver.orders_inc', 'U') IS NOT NULL
+    DROP TABLE silver.orders_inc;
+GO
+
+CREATE TABLE silver.orders_inc
+(
+    order_id         INT           NULL,
+    customer_id      INT           NULL,
+    product_id       INT           NULL,
+    quantity         INT           NULL,
+    order_date       DATE          NULL,
+    created_at_utc   DATETIME2     NULL,
+    updated_at_utc   DATETIME2     NULL,
+    load_run_id      VARCHAR(100)  NULL
+)
+WITH
+(
+    DISTRIBUTION = ROUND_ROBIN,
+    HEAP
+);
+GO
