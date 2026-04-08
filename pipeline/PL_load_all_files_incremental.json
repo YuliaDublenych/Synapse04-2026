@@ -504,8 +504,14 @@
 											},
 											"waitOnCompletion": true,
 											"parameters": {
-												"p_load_run_id": "@pipeline().RunId",
-												"p_procname": "@item().DeltaProcName"
+												"p_load_run_id": {
+													"value": "@pipeline().RunId",
+													"type": "Expression"
+												},
+												"p_procname": {
+													"value": "@item().DeltaProcName",
+													"type": "Expression"
+												}
 											}
 										}
 									}
