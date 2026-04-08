@@ -96,7 +96,7 @@
 									"referenceName": "ls_adls_source",
 									"type": "LinkedServiceReference"
 								},
-								"path": "test/staging"
+								"path": "staging"
 							},
 							"enableSkipIncompatibleRow": true,
 							"logSettings": {
@@ -110,7 +110,7 @@
 										"referenceName": "ls_adls_source",
 										"type": "LinkedServiceReference"
 									},
-									"path": "test/errors"
+									"path": "errors"
 								}
 							}
 						},
