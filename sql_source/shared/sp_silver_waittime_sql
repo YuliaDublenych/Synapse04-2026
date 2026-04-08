@@ -1,47 +1,30 @@
-IF OBJECT_ID('silver.sp_load_patients', 'P') IS NOT NULL
-    DROP PROCEDURE silver.sp_load_patients;
+IF OBJECT_ID('silver.usp_exec', 'P') IS NOT NULL
+    DROP PROCEDURE silver.usp_exec;
 GO
 
-CREATE PROCEDURE silver.sp_load_patients
-    @load_run_id VARCHAR(100)
+CREATE PROCEDURE silver.usp_exec
+    @load_run_id NVARCHAR(100),
+    @procname NVARCHAR(256)
 AS
 BEGIN
-    TRUNCATE TABLE silver.patients;
+    DECLARE @sql NVARCHAR(MAX);
 
-    INSERT INTO silver.patients
-    (
-        patient_id,
-        patient_name,
-        gender
-    )
-    SELECT
-        TRY_CAST(patient_id AS INT)            AS patient_id,
-        NULLIF(LTRIM(RTRIM(patient_name)), '') AS patient_name,
-        NULLIF(LTRIM(RTRIM(gender)), '')       AS gender
-    FROM bronze.patients;
-END;
-GO
+    IF @procname IS NULL OR LTRIM(RTRIM(@procname)) = ''
+    BEGIN
+        RAISERROR('procname is required', 16, 1);
+    END
+    ELSE
+    BEGIN
+        SET @sql =
+            N'EXEC ' +
+            QUOTENAME(PARSENAME(@procname, 2)) + N'.' +
+            QUOTENAME(PARSENAME(@procname, 1)) +
+            N' @load_run_id = @p_load_run_id';
 
-IF OBJECT_ID('silver.sp_load_visits', 'P') IS NOT NULL
-    DROP PROCEDURE silver.sp_load_visits;
-GO
-
-CREATE PROCEDURE silver.sp_load_visits
-    @load_run_id VARCHAR(100)
-AS
-BEGIN
-    TRUNCATE TABLE silver.visits;
-
-    INSERT INTO silver.visits
-    (
-        visit_id,
-        patient_id,
-        visit_date
-    )
-    SELECT
-        TRY_CAST(visit_id AS INT)    AS visit_id,
-        TRY_CAST(patient_id AS INT)  AS patient_id,
-        TRY_CAST(visit_date AS DATE) AS visit_date
-    FROM bronze.visits;
+        EXEC sp_executesql
+            @sql,
+            N'@p_load_run_id NVARCHAR(100)',
+            @p_load_run_id = @load_run_id;
+    END
 END;
 GO
