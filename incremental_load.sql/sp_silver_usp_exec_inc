@@ -1,0 +1,30 @@
+IF OBJECT_ID('silver.usp_exec', 'P') IS NOT NULL
+    DROP PROCEDURE silver.usp_exec;
+GO
+
+CREATE PROCEDURE silver.usp_exec
+    @load_run_id NVARCHAR(100),
+    @procname NVARCHAR(256)
+AS
+BEGIN
+    DECLARE @sql NVARCHAR(MAX);
+
+    IF @procname IS NULL OR LTRIM(RTRIM(@procname)) = ''
+    BEGIN
+        RAISERROR('procname is required', 16, 1);
+    END
+    ELSE
+    BEGIN
+        SET @sql =
+            N'EXEC ' +
+            QUOTENAME(PARSENAME(@procname, 2)) + N'.' +
+            QUOTENAME(PARSENAME(@procname, 1)) +
+            N' @load_run_id = @p_load_run_id';
+
+        EXEC sp_executesql
+            @sql,
+            N'@p_load_run_id NVARCHAR(100)',
+            @p_load_run_id = @load_run_id;
+    END
+END;
+GO
