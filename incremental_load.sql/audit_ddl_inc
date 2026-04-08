@@ -1,0 +1,109 @@
+/*============================================================
+  Ensure schema exists
+============================================================*/
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.schemas
+    WHERE name = 'audit'
+)
+BEGIN
+    EXEC ('CREATE SCHEMA audit');
+END;
+GO
+
+/*============================================================
+  Recreate audit table
+============================================================*/
+IF OBJECT_ID('audit.PipelineRun', 'U') IS NOT NULL
+BEGIN
+    DROP TABLE audit.PipelineRun;
+END;
+GO
+
+CREATE TABLE audit.PipelineRun
+(
+    AuditId         BIGINT IDENTITY(1,1) NOT NULL,
+    PipelineName    VARCHAR(200)  NOT NULL,
+    PipelineRunId   VARCHAR(64)   NOT NULL,
+    ConfigId        INT           NOT NULL,
+    FileName        VARCHAR(512)  NULL,
+    TargetTable     VARCHAR(256)  NULL,
+    StartTime       DATETIME2(3)  NOT NULL,
+    EndTime         DATETIME2(3)  NULL,
+    Status          VARCHAR(30)   NOT NULL,
+    RowsCopied      BIGINT        NULL,
+    ErrorMessage    VARCHAR(4000) NULL
+)
+WITH
+(
+    DISTRIBUTION = ROUND_ROBIN,
+    HEAP
+);
+GO
+
+/*============================================================
+  Start proc
+============================================================*/
+IF OBJECT_ID('audit.sp_start_run', 'P') IS NOT NULL
+BEGIN
+    DROP PROCEDURE audit.sp_start_run;
+END;
+GO
+
+CREATE PROCEDURE audit.sp_start_run
+    @PipelineName   VARCHAR(200),
+    @PipelineRunId  VARCHAR(64),
+    @ConfigId       INT,
+    @FileName       VARCHAR(512),
+    @TargetTable    VARCHAR(256)
+AS
+BEGIN
+    INSERT INTO audit.PipelineRun
+    (
+        PipelineName,
+        PipelineRunId,
+        ConfigId,
+        FileName,
+        TargetTable,
+        StartTime,
+        Status
+    )
+    SELECT
+        @PipelineName,
+        @PipelineRunId,
+        @ConfigId,
+        @FileName,
+        @TargetTable,
+        SYSDATETIME(),
+        'Started';
+END;
+GO
+
+
+/*============================================================
+  End proc
+============================================================*/
+IF OBJECT_ID('audit.sp_end_run', 'P') IS NOT NULL
+BEGIN
+    DROP PROCEDURE audit.sp_end_run;
+END;
+GO
+
+CREATE PROCEDURE audit.sp_end_run
+    @PipelineRunId  VARCHAR(64),
+    @ConfigId       INT,
+    @Status         VARCHAR(30),
+    @RowsCopied     BIGINT,
+    @ErrorMessage   VARCHAR(4000)
+AS
+BEGIN
+    UPDATE audit.PipelineRun
+       SET EndTime      = SYSDATETIME(),
+           Status       = @Status,
+           RowsCopied   = @RowsCopied,
+           ErrorMessage = @ErrorMessage
+     WHERE PipelineRunId = @PipelineRunId
+       AND ConfigId      = @ConfigId
+       AND EndTime IS NULL;
+END;
+GO
