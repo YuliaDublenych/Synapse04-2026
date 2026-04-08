@@ -1,0 +1,39 @@
+/*============================================================
+  Watermark control table
+============================================================*/
+IF OBJECT_ID('config.WatermarkControl', 'U') IS NOT NULL
+    DROP TABLE config.WatermarkControl;
+GO
+
+CREATE TABLE config.WatermarkControl
+(
+    WatermarkId         INT IDENTITY(1,1) NOT NULL,
+    ProjectName         VARCHAR(100) NOT NULL,
+    LoadType            VARCHAR(50)  NOT NULL,     -- FULL / INCREMENTAL
+    TargetTable         VARCHAR(128) NOT NULL,     -- patients, visits, customers...
+    WatermarkColumn     VARCHAR(128) NOT NULL,     -- visit_date, order_date, etc.
+    LastProcessedValue  DATETIME2    NULL,
+    LastRunId           VARCHAR(100) NULL,
+    LastUpdatedAtUtc    DATETIME2    NULL
+)
+WITH
+(
+    DISTRIBUTION = ROUND_ROBIN,
+    HEAP
+);
+GO
+
+INSERT INTO config.WatermarkControl
+(
+    ProjectName,
+    LoadType,
+    TargetTable,
+    WatermarkColumn,
+    LastProcessedValue,
+    LastRunId,
+    LastUpdatedAtUtc
+)
+SELECT 'waittime', 'INCREMENTAL', 'visits', 'visit_date', NULL, NULL, NULL
+UNION ALL
+SELECT 'demo', 'INCREMENTAL', 'orders', 'order_date', NULL, NULL, NULL;
+GO
