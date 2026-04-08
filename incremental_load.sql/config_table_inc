@@ -1,0 +1,149 @@
+/*============================================================
+  Ensure schema exists
+============================================================*/
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.schemas
+    WHERE name = 'config'
+)
+BEGIN
+    EXEC ('CREATE SCHEMA config');
+END;
+GO
+
+/*============================================================
+  Recreate table
+============================================================*/
+IF OBJECT_ID('config.IngestionConfig', 'U') IS NOT NULL
+BEGIN
+    DROP TABLE config.IngestionConfig;
+END;
+GO
+
+/*============================================================
+  Create table
+============================================================*/
+CREATE TABLE config.IngestionConfig
+(
+    ConfigId         INT IDENTITY(1,1) NOT NULL,
+    ProjectName      VARCHAR(100) NOT NULL,
+    LoadOrder        INT NOT NULL,
+    LoadType         VARCHAR(50) NOT NULL,   -- FULL / INCREMENTAL
+
+    IsActive         BIT NOT NULL
+        CONSTRAINT DF_IngestionConfig_IsActive DEFAULT (1),
+
+    SourceContainer  VARCHAR(128) NOT NULL,
+    SourceDirectory  VARCHAR(512) NOT NULL,
+    FileName         VARCHAR(512) NOT NULL,
+
+    TargetSchema     VARCHAR(128) NOT NULL,
+    TargetTable      VARCHAR(128) NOT NULL,
+
+    SilverProcName   VARCHAR(256) NULL,
+    EnableSilver     BIT NOT NULL
+        CONSTRAINT DF_IngestionConfig_EnableSilver DEFAULT (1)
+)
+WITH
+(
+    DISTRIBUTION = ROUND_ROBIN,
+    HEAP
+);
+GO
+
+/*============================================================
+  Load config rows
+============================================================*/
+TRUNCATE TABLE config.IngestionConfig;
+GO
+
+INSERT INTO config.IngestionConfig
+(
+    ProjectName,
+    LoadOrder,
+    LoadType,
+    IsActive,
+    SourceContainer,
+    SourceDirectory,
+    FileName,
+    TargetSchema,
+    TargetTable,
+    SilverProcName,
+    EnableSilver
+)
+SELECT 'demo',      1, 'FULL',        1, 'test',     'source', 'customers.csv', 'bronze', 'customers', 'silver.sp_load_customers',      1
+UNION ALL
+SELECT 'demo',      2, 'FULL',        1, 'test',     'source', 'products.csv',  'bronze', 'products',  'silver.sp_load_products',       1
+UNION ALL
+SELECT 'demo',      3, 'FULL',        1, 'test',     'source', 'orders.csv',    'bronze', 'orders',    'silver.sp_load_orders',         1
+UNION ALL
+SELECT 'waittime',  1, 'FULL',        1, 'waittime', 'source', 'patients.csv',  'bronze', 'patients',  'silver.sp_load_patients',       1
+UNION ALL
+SELECT 'waittime',  2, 'FULL',        1, 'waittime', 'source', 'visits.csv',    'bronze', 'visits',    'silver.sp_load_visits',         1
+
+UNION ALL
+SELECT 'demo',      1, 'INCREMENTAL', 1, 'test',     'source', 'customers.csv', 'bronze', 'customers', 'silver.sp_load_customers_inc',  1
+UNION ALL
+SELECT 'demo',      2, 'INCREMENTAL', 1, 'test',     'source', 'products.csv',  'bronze', 'products',  'silver.sp_load_products_inc',   1
+UNION ALL
+SELECT 'demo',      3, 'INCREMENTAL', 1, 'test',     'source', 'orders.csv',    'bronze', 'orders',    'silver.sp_load_orders_inc',     1
+UNION ALL
+SELECT 'waittime',  1, 'INCREMENTAL', 1, 'waittime', 'source', 'patients.csv',  'bronze', 'patients',  'silver.sp_load_patients_inc',   1
+UNION ALL
+SELECT 'waittime',  2, 'INCREMENTAL', 1, 'waittime', 'source', 'visits.csv',    'bronze', 'visits',    'silver.sp_load_visits_inc',     1;
+GO
+
+/*============================================================
+  Check config
+============================================================*/
+SELECT *
+FROM config.IngestionConfig
+ORDER BY ProjectName, LoadType, LoadOrder;
+GO
+
+/*============================================================
+  Watermark column
+============================================================*/
+ALTER TABLE config.IngestionConfig
+ADD WatermarkColumn VARCHAR(128) NULL;
+GO
+
+UPDATE config.IngestionConfig
+SET WatermarkColumn = 'visit_date'
+WHERE ProjectName = 'waittime'
+  AND LoadType = 'INCREMENTAL'
+  AND TargetTable = 'visits';
+
+UPDATE config.IngestionConfig
+SET WatermarkColumn = 'order_date'
+WHERE ProjectName = 'demo'
+  AND LoadType = 'INCREMENTAL'
+  AND TargetTable = 'orders';
+GO
+
+/*============================================================
+DeltaProcName
+============================================================*/
+
+
+ALTER TABLE config.IngestionConfig
+ADD DeltaProcName VARCHAR(256) NULL;
+GO
+
+UPDATE config.IngestionConfig
+SET DeltaProcName = 'staging.sp_load_orders_delta'
+WHERE ProjectName = 'demo'
+  AND LoadType = 'INCREMENTAL'
+  AND TargetTable = 'orders';
+
+UPDATE config.IngestionConfig
+SET DeltaProcName = 'staging.sp_load_visits_delta'
+WHERE ProjectName = 'waittime'
+  AND LoadType = 'INCREMENTAL'
+  AND TargetTable = 'visits';
+GO
+
+UPDATE config.IngestionConfig
+SET DeltaProcName = NULL
+WHERE LoadType = 'FULL';
+GO
