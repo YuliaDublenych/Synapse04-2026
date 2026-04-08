@@ -26,6 +26,10 @@ GO
 CREATE TABLE config.IngestionConfig
 (
     ConfigId         INT IDENTITY(1,1) NOT NULL,
+    ProjectName      VARCHAR(100) NOT NULL,
+    LoadOrder        INT NOT NULL,
+    LoadType         VARCHAR(50) NOT NULL,
+
     IsActive         BIT NOT NULL
         CONSTRAINT DF_IngestionConfig_IsActive DEFAULT (1),
 
@@ -57,6 +61,7 @@ INSERT INTO config.IngestionConfig
 (
     ProjectName,
     LoadOrder,
+    LoadType,
     IsActive,
     SourceContainer,
     SourceDirectory,
@@ -66,20 +71,32 @@ INSERT INTO config.IngestionConfig
     SilverProcName,
     EnableSilver
 )
-SELECT 'demo',     1, 1, 'test',     'source', 'customers.csv', 'bronze', 'customers', 'silver.sp_load_customers', 1
+SELECT 'demo',     1, 'FULL',        1, 'test',     'source', 'customers.csv', 'bronze', 'customers', 'silver.sp_load_customers',     1
 UNION ALL
-SELECT 'demo',     2, 1, 'test',     'source', 'products.csv',  'bronze', 'products',  'silver.sp_load_products', 1
+SELECT 'demo',     2, 'FULL',        1, 'test',     'source', 'products.csv',  'bronze', 'products',  'silver.sp_load_products',      1
 UNION ALL
-SELECT 'demo',     3, 1, 'test',     'source', 'orders.csv',    'bronze', 'orders',    'silver.sp_load_orders', 1
+SELECT 'demo',     3, 'FULL',        1, 'test',     'source', 'orders.csv',    'bronze', 'orders',    'silver.sp_load_orders',        1
 UNION ALL
-SELECT 'waittime', 1, 1, 'waittime', 'source', 'patients.csv',  'bronze', 'patients',  'silver.sp_load_patients', 1
+SELECT 'waittime', 1, 'FULL',        1, 'waittime', 'source', 'patients.csv',  'bronze', 'patients',  'silver.sp_load_patients',      1
 UNION ALL
-SELECT 'waittime', 2, 1, 'waittime', 'source', 'visits.csv',    'bronze', 'visits',    'silver.sp_load_visits', 1;
+SELECT 'waittime', 2, 'FULL',        1, 'waittime', 'source', 'visits.csv',    'bronze', 'visits',    'silver.sp_load_visits',        1
+UNION ALL
+SELECT 'demo',     1, 'INCREMENTAL', 1, 'test',     'source', 'customers.csv', 'bronze', 'customers', 'silver.sp_load_customers_inc', 1
+UNION ALL
+SELECT 'demo',     2, 'INCREMENTAL', 1, 'test',     'source', 'products.csv',  'bronze', 'products',  'silver.sp_load_products_inc',  1
+UNION ALL
+SELECT 'demo',     3, 'INCREMENTAL', 1, 'test',     'source', 'orders.csv',    'bronze', 'orders',    'silver.sp_load_orders_inc',    1
+UNION ALL
+SELECT 'waittime', 1, 'INCREMENTAL', 1, 'waittime', 'source', 'patients.csv',  'bronze', 'patients',  'silver.sp_load_patients_inc',  1
+UNION ALL
+SELECT 'waittime', 2, 'INCREMENTAL', 1, 'waittime', 'source', 'visits.csv',    'bronze', 'visits',    'silver.sp_load_visits_inc',    1;
 GO
 
 /*============================================================
   Check config
 ============================================================*/
 SELECT *
-FROM config.IngestionConfig;
+FROM config.IngestionConfig
+ORDER BY ProjectName, LoadType, LoadOrder;
 GO
+
