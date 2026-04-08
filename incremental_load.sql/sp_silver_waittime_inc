@@ -1,0 +1,83 @@
+IF OBJECT_ID('silver.sp_load_patients_inc', 'P') IS NOT NULL
+    DROP PROCEDURE silver.sp_load_patients_inc;
+GO
+
+CREATE PROCEDURE silver.sp_load_patients_inc
+    @load_run_id VARCHAR(100)
+AS
+BEGIN
+    INSERT INTO silver.patients_inc
+    (
+        patient_id,
+        patient_name,
+        gender,
+        created_at_utc,
+        updated_at_utc,
+        load_run_id
+    )
+    SELECT
+        TRY_CAST(b.patient_id AS INT)                  AS patient_id,
+        NULLIF(LTRIM(RTRIM(b.patient_name)), '')       AS patient_name,
+        NULLIF(LTRIM(RTRIM(b.gender)), '')             AS gender,
+        GETUTCDATE()                                   AS created_at_utc,
+        GETUTCDATE()                                   AS updated_at_utc,
+        @load_run_id                                   AS load_run_id
+    FROM bronze.patients b
+    WHERE NOT EXISTS
+    (
+        SELECT 1
+        FROM silver.patients_inc s
+        WHERE s.patient_id = TRY_CAST(b.patient_id AS INT)
+    );
+END;
+GO
+
+
+
+IF OBJECT_ID('silver.sp_load_visits_inc', 'P') IS NOT NULL
+    DROP PROCEDURE silver.sp_load_visits_inc;
+GO
+
+CREATE PROCEDURE silver.sp_load_visits_inc
+    @load_run_id VARCHAR(100)
+AS
+BEGIN
+    INSERT INTO silver.visits_inc
+    (
+        visit_id,
+        patient_id,
+        visit_date,
+        created_at_utc,
+        updated_at_utc,
+        load_run_id
+    )
+    SELECT
+        d.visit_id,
+        d.patient_id,
+        d.visit_date,
+        GETUTCDATE(),
+        GETUTCDATE(),
+        @load_run_id
+    FROM staging.visits_delta d
+    WHERE NOT EXISTS
+    (
+        SELECT 1
+        FROM silver.visits_inc s
+        WHERE s.visit_id = d.visit_id
+    );
+
+    UPDATE config.WatermarkControl
+    SET
+        LastProcessedValue =
+        (
+            SELECT MAX(CAST(visit_date AS DATETIME2))
+            FROM staging.visits_delta
+        ),
+        LastRunId = @load_run_id,
+        LastUpdatedAtUtc = GETUTCDATE()
+    WHERE ProjectName = 'waittime'
+      AND LoadType = 'INCREMENTAL'
+      AND TargetTable = 'visits'
+      AND EXISTS (SELECT 1 FROM staging.visits_delta);
+END;
+GO
