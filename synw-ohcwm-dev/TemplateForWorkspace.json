@@ -12,6 +12,10 @@
 			"metadata": "Secure string for 'connectionString' of 'synw-ohcwm-dev-WorkspaceDefaultSqlServer'",
 			"defaultValue": "Integrated Security=False;Encrypt=True;Connection Timeout=30;Data Source=tcp:synw-ohcwm-dev.sql.azuresynapse.net,1433;Initial Catalog=@{linkedService().DBName}"
 		},
+		"LS_sqldb_password": {
+			"type": "secureString",
+			"metadata": "Secure string for 'password' of 'LS_sqldb'"
+		},
 		"ls_adls_source_properties_typeProperties_url": {
 			"type": "string",
 			"defaultValue": "https://adlsohcwmfree01.dfs.core.windows.net/"
@@ -27,6 +31,18 @@
 		"synw-ohcwm-dev-WorkspaceDefaultStorage_properties_typeProperties_url": {
 			"type": "string",
 			"defaultValue": "https://adlsohcwmfree01.dfs.core.windows.net"
+		},
+		"LS_sqldb_properties_typeProperties_server": {
+			"type": "string",
+			"defaultValue": "serverfreeohcwm01.database.windows.net"
+		},
+		"LS_sqldb_properties_typeProperties_database": {
+			"type": "string",
+			"defaultValue": "sqldbfreecwm01"
+		},
+		"LS_sqldb_properties_typeProperties_userName": {
+			"type": "string",
+			"defaultValue": "april"
 		}
 	},
 	"variables": {
@@ -2975,6 +2991,91 @@
 			},
 			"dependsOn": [],
 			"location": "centralus"
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/LS_sqldb')]",
+			"type": "Microsoft.Synapse/workspaces/linkedServices",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"annotations": [],
+				"type": "AzureSqlDatabase",
+				"typeProperties": {
+					"server": "[parameters('LS_sqldb_properties_typeProperties_server')]",
+					"database": "[parameters('LS_sqldb_properties_typeProperties_database')]",
+					"encrypt": "mandatory",
+					"trustServerCertificate": false,
+					"authenticationType": "SQL",
+					"userName": "[parameters('LS_sqldb_properties_typeProperties_userName')]",
+					"password": {
+						"type": "SecureString",
+						"value": "[parameters('LS_sqldb_password')]"
+					}
+				},
+				"connectVia": {
+					"referenceName": "AutoResolveIntegrationRuntime",
+					"type": "IntegrationRuntimeReference"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/integrationRuntimes/AutoResolveIntegrationRuntime')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/DS_sqldb')]",
+			"type": "Microsoft.Synapse/workspaces/datasets",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_sqldb",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"schemaname": {
+						"type": "string"
+					},
+					"tablename": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "PatientID",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "FirstName",
+						"type": "varchar"
+					},
+					{
+						"name": "LastName",
+						"type": "varchar"
+					},
+					{
+						"name": "DateOfBirth",
+						"type": "date"
+					},
+					{
+						"name": "Gender",
+						"type": "varchar"
+					}
+				],
+				"typeProperties": {
+					"schema": {
+						"value": "@dataset().schemaname",
+						"type": "Expression"
+					},
+					"table": {
+						"value": "@dataset().tablename",
+						"type": "Expression"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/linkedServices/LS_sqldb')]"
+			]
 		}
 	]
 }
