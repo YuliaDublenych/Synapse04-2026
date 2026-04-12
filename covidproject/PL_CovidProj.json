@@ -1,0 +1,193 @@
+{
+    "name": "PL_CovidProj",
+    "properties": {
+        "activities": [
+            {
+                "name": "Copy to staging bronze",
+                "type": "Copy",
+                "dependsOn": [
+                    {
+                        "activity": "Set LastID",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "AzureSqlSource",
+                        "sqlReaderQuery": {
+                            "value": "@concat('SELECT * FROM dbo.patient WHERE PatientID > ',variables('lastid'))",
+                            "type": "Expression"
+                        },
+                        "queryTimeout": "02:00:00",
+                        "partitionOption": "None"
+                    },
+                    "sink": {
+                        "type": "SqlDWSink",
+                        "preCopyScript": "SELECT * INTO bronze1.staging_Patient FROM bronze1.Patient Where 1=0;",
+                        "writeBehavior": "Insert",
+                        "sqlWriterUseTableLock": false,
+                        "disableMetricsCollection": false
+                    },
+                    "enableStaging": false,
+                    "translator": {
+                        "type": "TabularTranslator",
+                        "typeConversion": true,
+                        "typeConversionSettings": {
+                            "allowDataTruncation": true,
+                            "treatBooleanAsNumber": false
+                        }
+                    }
+                },
+                "inputs": [
+                    {
+                        "referenceName": "DS_sqldb",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "schemaname": "na",
+                            "tablename": "na"
+                        }
+                    }
+                ],
+                "outputs": [
+                    {
+                        "referenceName": "DS_DedSQLpool_Table_Param",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "pSchema": "bronze1",
+                            "pTable": "staging_Patient"
+                        }
+                    }
+                ]
+            },
+            {
+                "name": "Lookupwatermark",
+                "type": "Lookup",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "SqlDWSource",
+                        "sqlReaderQuery": "SELECT ISNULL(\n    (SELECT LastID\n     FROM dbo.Watermark\n     WHERE TableName = 'Patient'),\n    -1\n) AS LastID;\n",
+                        "queryTimeout": "02:00:00",
+                        "partitionOption": "None"
+                    },
+                    "dataset": {
+                        "referenceName": "DS_DedSQLpool_Table_Param",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "pSchema": "na",
+                            "pTable": "na"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "Set LastID",
+                "type": "SetVariable",
+                "dependsOn": [
+                    {
+                        "activity": "Lookupwatermark",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "variableName": "lastid",
+                    "value": {
+                        "value": "@activity('Lookupwatermark').output.firstRow.LastID",
+                        "type": "Expression"
+                    }
+                }
+            },
+            {
+                "name": "update watermark",
+                "type": "Script",
+                "dependsOn": [
+                    {
+                        "activity": "Merge to main bronze",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "linkedServiceName": {
+                    "referenceName": "ls_sql_dedicated_dev",
+                    "type": "LinkedServiceReference"
+                },
+                "typeProperties": {
+                    "scripts": [
+                        {
+                            "type": "NonQuery",
+                            "text": "\nIF EXISTS (SELECT 1 FROM dbo.Watermark WHERE TableName = 'Patient')\nBEGIN\n    UPDATE dbo.Watermark\n    SET LastID = (SELECT MAX(PatientID) FROM bronze1.patient)\n    WHERE TableName = 'Patient';\nEND\nELSE\nBEGIN\n    INSERT INTO dbo.Watermark (TableName, LastID)\n    SELECT 'Patient' AS Tablename, (SELECT MAX(PatientID) FROM bronze1.patient) AS LastID;\nEND"
+                        }
+                    ],
+                    "scriptBlockExecutionTimeout": "02:00:00"
+                }
+            },
+            {
+                "name": "Merge to main bronze",
+                "type": "SqlPoolStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "Copy to staging bronze",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "sqlPool": {
+                    "referenceName": "dsqlp_dev02",
+                    "type": "SqlPoolReference"
+                },
+                "typeProperties": {
+                    "storedProcedureName": "bronze1.usp_merge_patient"
+                }
+            }
+        ],
+        "variables": {
+            "lastid": {
+                "type": "Integer"
+            }
+        },
+        "annotations": []
+    }
+}
