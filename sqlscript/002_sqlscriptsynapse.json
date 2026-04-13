@@ -1,0 +1,20 @@
+{
+	"name": "002_sqlscriptsynapse",
+	"properties": {
+		"folder": {
+			"name": "CovidProj"
+		},
+		"content": {
+			"query": "IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'bronze1')\nBEGIN\n    EXEC('CREATE SCHEMA bronze1');\nEND;\nGO\n\nIF OBJECT_ID('dbo.Watermark', 'U') IS NOT NULL\n    DROP TABLE dbo.Watermark;\nGO\n\nCREATE TABLE dbo.Watermark\n(\n    TableName VARCHAR(200) NOT NULL,\n    LastID    INT          NULL\n);\nGO\n\nIF OBJECT_ID('bronze1.Patient', 'U') IS NOT NULL\n    DROP TABLE bronze1.Patient;\nGO\n\nCREATE TABLE bronze1.Patient\n(\n    PatientID   INT           NOT NULL,\n    FirstName   VARCHAR(50)   NOT NULL,\n    LastName    VARCHAR(50)   NOT NULL,\n    DateOfBirth DATE          NOT NULL,\n    Gender      VARCHAR(10)   NOT NULL\n);\nGO\n\nIF OBJECT_ID('bronze1.staging_Patient', 'U') IS NOT NULL\n    DROP TABLE bronze1.staging_Patient;\nGO\n\nCREATE TABLE bronze1.staging_Patient\n(\n    PatientID   INT           NOT NULL,\n    FirstName   VARCHAR(50)   NOT NULL,\n    LastName    VARCHAR(50)   NOT NULL,\n    DateOfBirth DATE          NOT NULL,\n    Gender      VARCHAR(10)   NOT NULL\n);\nGO\n\nIF OBJECT_ID('bronze1.usp_merge_patient', 'P') IS NOT NULL\n    DROP PROCEDURE bronze1.usp_merge_patient;\nGO\n\nCREATE PROCEDURE bronze1.usp_merge_patient\nAS\nBEGIN\n    SET NOCOUNT ON;\n\n    UPDATE tgt\n    SET\n        tgt.FirstName   = src.FirstName,\n        tgt.LastName    = src.LastName,\n        tgt.DateOfBirth = src.DateOfBirth,\n        tgt.Gender      = src.Gender\n    FROM bronze1.Patient AS tgt\n    INNER JOIN bronze1.staging_Patient AS src\n        ON tgt.PatientID = src.PatientID;\n\n    INSERT INTO bronze1.Patient\n    (\n        PatientID,\n        FirstName,\n        LastName,\n        DateOfBirth,\n        Gender\n    )\n    SELECT\n        src.PatientID,\n        src.FirstName,\n        src.LastName,\n        src.DateOfBirth,\n        src.Gender\n    FROM bronze1.staging_Patient AS src\n    LEFT JOIN bronze1.Patient AS tgt\n        ON tgt.PatientID = src.PatientID\n    WHERE tgt.PatientID IS NULL;\n\n    TRUNCATE TABLE bronze1.staging_Patient;\nEND;\nGO\n\n\nSELECT * FROM dbo.Watermark;\nSELECT * FROM bronze1.Patient;\nSELECT * FROM bronze1.staging_Patient;",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "dsqlp_dev02",
+				"poolName": "dsqlp_dev02"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}
