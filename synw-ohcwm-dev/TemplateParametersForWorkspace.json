@@ -5,11 +5,20 @@
 		"workspaceName": {
 			"value": "synw-ohcwm-dev"
 		},
+		"LS_sqldb_password": {
+			"value": ""
+		},
 		"synw-ohcwm-dev-WorkspaceDefaultSqlServer_connectionString": {
 			"value": "Integrated Security=False;Encrypt=True;Connection Timeout=30;Data Source=tcp:synw-ohcwm-dev.sql.azuresynapse.net,1433;Initial Catalog=@{linkedService().DBName}"
 		},
-		"LS_sqldb_password": {
-			"value": ""
+		"LS_sqldb_properties_typeProperties_server": {
+			"value": "serverfreeohcwm01.database.windows.net"
+		},
+		"LS_sqldb_properties_typeProperties_database": {
+			"value": "sqldbfreecwm01"
+		},
+		"LS_sqldb_properties_typeProperties_userName": {
+			"value": "april"
 		},
 		"ls_adls_source_properties_typeProperties_url": {
 			"value": "https://adlsohcwmfree01.dfs.core.windows.net/"
@@ -22,15 +31,6 @@
 		},
 		"synw-ohcwm-dev-WorkspaceDefaultStorage_properties_typeProperties_url": {
 			"value": "https://adlsohcwmfree01.dfs.core.windows.net"
-		},
-		"LS_sqldb_properties_typeProperties_server": {
-			"value": "serverfreeohcwm01.database.windows.net"
-		},
-		"LS_sqldb_properties_typeProperties_database": {
-			"value": "sqldbfreecwm01"
-		},
-		"LS_sqldb_properties_typeProperties_userName": {
-			"value": "april"
 		}
 	}
 }

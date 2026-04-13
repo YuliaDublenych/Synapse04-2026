@@ -7,14 +7,26 @@
 			"metadata": "Workspace name",
 			"defaultValue": "synw-ohcwm-dev"
 		},
+		"LS_sqldb_password": {
+			"type": "secureString",
+			"metadata": "Secure string for 'password' of 'LS_sqldb'"
+		},
 		"synw-ohcwm-dev-WorkspaceDefaultSqlServer_connectionString": {
 			"type": "secureString",
 			"metadata": "Secure string for 'connectionString' of 'synw-ohcwm-dev-WorkspaceDefaultSqlServer'",
 			"defaultValue": "Integrated Security=False;Encrypt=True;Connection Timeout=30;Data Source=tcp:synw-ohcwm-dev.sql.azuresynapse.net,1433;Initial Catalog=@{linkedService().DBName}"
 		},
-		"LS_sqldb_password": {
-			"type": "secureString",
-			"metadata": "Secure string for 'password' of 'LS_sqldb'"
+		"LS_sqldb_properties_typeProperties_server": {
+			"type": "string",
+			"defaultValue": "serverfreeohcwm01.database.windows.net"
+		},
+		"LS_sqldb_properties_typeProperties_database": {
+			"type": "string",
+			"defaultValue": "sqldbfreecwm01"
+		},
+		"LS_sqldb_properties_typeProperties_userName": {
+			"type": "string",
+			"defaultValue": "april"
 		},
 		"ls_adls_source_properties_typeProperties_url": {
 			"type": "string",
@@ -31,18 +43,6 @@
 		"synw-ohcwm-dev-WorkspaceDefaultStorage_properties_typeProperties_url": {
 			"type": "string",
 			"defaultValue": "https://adlsohcwmfree01.dfs.core.windows.net"
-		},
-		"LS_sqldb_properties_typeProperties_server": {
-			"type": "string",
-			"defaultValue": "serverfreeohcwm01.database.windows.net"
-		},
-		"LS_sqldb_properties_typeProperties_database": {
-			"type": "string",
-			"defaultValue": "sqldbfreecwm01"
-		},
-		"LS_sqldb_properties_typeProperties_userName": {
-			"type": "string",
-			"defaultValue": "april"
 		}
 	},
 	"variables": {
@@ -475,6 +475,229 @@
 			"dependsOn": [
 				"[concat(variables('workspaceId'), '/datasets/DS_ADLS_CSV_Param')]",
 				"[concat(variables('workspaceId'), '/datasets/DS_DedSQLpool_Table_Param')]",
+				"[concat(variables('workspaceId'), '/linkedServices/ls_adls_source')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/PL_CovidProj')]",
+			"type": "Microsoft.Synapse/workspaces/pipelines",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"activities": [
+					{
+						"name": "Lookupwatermark",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "SqlDWSource",
+								"sqlReaderQuery": "SELECT ISNULL(\n    (SELECT LastID\n     FROM dbo.Watermark\n     WHERE TableName = 'Patient'),\n    -1\n) AS LastID;",
+								"queryTimeout": "02:00:00",
+								"partitionOption": "None"
+							},
+							"dataset": {
+								"referenceName": "DS_DedSQLpool_Table_Param",
+								"type": "DatasetReference",
+								"parameters": {
+									"pSchema": "na",
+									"pTable": "na"
+								}
+							}
+						}
+					},
+					{
+						"name": "Set LastID",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "Lookupwatermark",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "lastid",
+							"value": {
+								"value": "@activity('Lookupwatermark').output.firstRow.LastID",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "Copy to staging bronze",
+						"type": "Copy",
+						"dependsOn": [
+							{
+								"activity": "Set LastID",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": {
+									"value": "@concat('SELECT * FROM dbo.Patient WHERE PatientID > ',variables('lastid'))",
+									"type": "Expression"
+								},
+								"queryTimeout": "02:00:00",
+								"partitionOption": "None"
+							},
+							"sink": {
+								"type": "SqlDWSink",
+								"preCopyScript": "TRUNCATE TABLE bronze1.staging_Patient;",
+								"writeBehavior": "Insert",
+								"sqlWriterUseTableLock": false,
+								"disableMetricsCollection": false
+							},
+							"enableStaging": true,
+							"stagingSettings": {
+								"linkedServiceName": {
+									"referenceName": "ls_adls_source",
+									"type": "LinkedServiceReference"
+								},
+								"path": "staging"
+							},
+							"translator": {
+								"type": "TabularTranslator",
+								"typeConversion": true,
+								"typeConversionSettings": {
+									"allowDataTruncation": true,
+									"treatBooleanAsNumber": false
+								}
+							}
+						},
+						"inputs": [
+							{
+								"referenceName": "DS_sqldb",
+								"type": "DatasetReference",
+								"parameters": {
+									"schemaname": "dbo",
+									"tablename": "Patient"
+								}
+							}
+						],
+						"outputs": [
+							{
+								"referenceName": "DS_DedSQLpool_Table_Param",
+								"type": "DatasetReference",
+								"parameters": {
+									"pSchema": "bronze1",
+									"pTable": "staging_Patient"
+								}
+							}
+						]
+					},
+					{
+						"name": "sp_bronze1usp_merge_patient",
+						"type": "SqlPoolStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "Copy to staging bronze",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"sqlPool": {
+							"referenceName": "dsqlp_dev02",
+							"type": "SqlPoolReference"
+						},
+						"typeProperties": {
+							"storedProcedureName": "[bronze1].[usp_merge_patient]"
+						}
+					},
+					{
+						"name": "update watermark",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "sp_bronze1usp_merge_patient",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "ls_sql_dedicated_dev",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": "IF EXISTS (SELECT 1 FROM dbo.Watermark WHERE TableName = 'Patient')\nBEGIN\n    UPDATE dbo.Watermark\n    SET LastID = (SELECT MAX(PatientID) FROM bronze1.Patient)\n    WHERE TableName = 'Patient';\nEND\nELSE\nBEGIN\n    INSERT INTO dbo.Watermark (TableName, LastID)\n    SELECT 'Patient', (SELECT MAX(PatientID) FROM bronze1.Patient);\nEND"
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"parameters": {
+					"schemaname": {
+						"type": "string"
+					},
+					"tablename": {
+						"type": "string"
+					}
+				},
+				"variables": {
+					"lastid": {
+						"type": "Integer"
+					}
+				},
+				"folder": {
+					"name": "CovidProj"
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/datasets/DS_DedSQLpool_Table_Param')]",
+				"[concat(variables('workspaceId'), '/datasets/DS_sqldb')]",
+				"[concat(variables('workspaceId'), '/sqlPools/dsqlp_dev02')]",
+				"[concat(variables('workspaceId'), '/linkedServices/ls_sql_dedicated_dev')]",
 				"[concat(variables('workspaceId'), '/linkedServices/ls_adls_source')]"
 			]
 		},
@@ -2318,6 +2541,91 @@
 			]
 		},
 		{
+			"name": "[concat(parameters('workspaceName'), '/DS_sqldb')]",
+			"type": "Microsoft.Synapse/workspaces/datasets",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_sqldb",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"schemaname": {
+						"type": "string"
+					},
+					"tablename": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "PatientID",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "FirstName",
+						"type": "varchar"
+					},
+					{
+						"name": "LastName",
+						"type": "varchar"
+					},
+					{
+						"name": "DateOfBirth",
+						"type": "date"
+					},
+					{
+						"name": "Gender",
+						"type": "varchar"
+					}
+				],
+				"typeProperties": {
+					"schema": {
+						"value": "@dataset().schemaname",
+						"type": "Expression"
+					},
+					"table": {
+						"value": "@dataset().tablename",
+						"type": "Expression"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/linkedServices/LS_sqldb')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/LS_sqldb')]",
+			"type": "Microsoft.Synapse/workspaces/linkedServices",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"annotations": [],
+				"type": "AzureSqlDatabase",
+				"typeProperties": {
+					"server": "[parameters('LS_sqldb_properties_typeProperties_server')]",
+					"database": "[parameters('LS_sqldb_properties_typeProperties_database')]",
+					"encrypt": "mandatory",
+					"trustServerCertificate": false,
+					"authenticationType": "SQL",
+					"userName": "[parameters('LS_sqldb_properties_typeProperties_userName')]",
+					"password": {
+						"type": "SecureString",
+						"value": "[parameters('LS_sqldb_password')]"
+					}
+				},
+				"connectVia": {
+					"referenceName": "AutoResolveIntegrationRuntime",
+					"type": "IntegrationRuntimeReference"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/integrationRuntimes/AutoResolveIntegrationRuntime')]"
+			]
+		},
+		{
 			"name": "[concat(parameters('workspaceName'), '/ls_adls_source')]",
 			"type": "Microsoft.Synapse/workspaces/linkedServices",
 			"apiVersion": "2019-06-01-preview",
@@ -2432,12 +2740,58 @@
 			"dependsOn": []
 		},
 		{
+			"name": "[concat(parameters('workspaceName'), '/001_ddl_sourcedbsql')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"folder": {
+					"name": "CovidProj"
+				},
+				"content": {
+					"query": "IF OBJECT_ID('dbo.Patient', 'U') IS NOT NULL\n    DROP TABLE dbo.Patient;\nGO\n\nCREATE TABLE dbo.Patient\n(\n    PatientID   INT         NOT NULL,\n    FirstName   VARCHAR(50) NOT NULL,\n    LastName    VARCHAR(50) NOT NULL,\n    DateOfBirth DATE        NOT NULL,\n    Gender      VARCHAR(10) NOT NULL,\n    CONSTRAINT PK_Patient PRIMARY KEY NONCLUSTERED (PatientID) NOT ENFORCED\n);\nGO\n\nINSERT INTO dbo.Patient (PatientID, FirstName, LastName, DateOfBirth, Gender)\nVALUES (1, 'John', 'Smith', '1985-03-15', 'Male');\nGO\n\nINSERT INTO dbo.Patient (PatientID, FirstName, LastName, DateOfBirth, Gender)\nVALUES (2, 'Emma', 'Johnson', '1992-07-22', 'Female');\nGO\n\nINSERT INTO dbo.Patient (PatientID, FirstName, LastName, DateOfBirth, Gender)\nVALUES (3, 'Liam', 'Brown', '1978-11-08', 'Male');\nGO\n\nINSERT INTO dbo.Patient (PatientID, FirstName, LastName, DateOfBirth, Gender)\nVALUES (4, 'Olivia', 'Davis', '2001-01-19', 'Female');\nGO\n\nINSERT INTO dbo.Patient (PatientID, FirstName, LastName, DateOfBirth, Gender)\nVALUES (5, 'Noah', 'Wilson', '1990-09-30', 'Male');\nGO\n\nINSERT INTO dbo.Patient (PatientID, FirstName, LastName, DateOfBirth, Gender)\nVALUES (6, 'Ava', 'Taylor', '1988-05-14', 'Female');\nGO\n\nSELECT * \nFROM dbo.Patient;\nGO\n",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "dsqlp_dev02",
+						"poolName": "dsqlp_dev02"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/002_sqlscriptsynapse')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"folder": {
+					"name": "CovidProj"
+				},
+				"content": {
+					"query": "IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'bronze1')\nBEGIN\n    EXEC('CREATE SCHEMA bronze1');\nEND;\nGO\n\nIF OBJECT_ID('dbo.Watermark', 'U') IS NOT NULL\n    DROP TABLE dbo.Watermark;\nGO\n\nCREATE TABLE dbo.Watermark\n(\n    TableName VARCHAR(200) NOT NULL,\n    LastID    INT          NULL\n);\nGO\n\nIF OBJECT_ID('bronze1.Patient', 'U') IS NOT NULL\n    DROP TABLE bronze1.Patient;\nGO\n\nCREATE TABLE bronze1.Patient\n(\n    PatientID   INT           NOT NULL,\n    FirstName   VARCHAR(50)   NOT NULL,\n    LastName    VARCHAR(50)   NOT NULL,\n    DateOfBirth DATE          NOT NULL,\n    Gender      VARCHAR(10)   NOT NULL\n);\nGO\n\nIF OBJECT_ID('bronze1.staging_Patient', 'U') IS NOT NULL\n    DROP TABLE bronze1.staging_Patient;\nGO\n\nCREATE TABLE bronze1.staging_Patient\n(\n    PatientID   INT           NOT NULL,\n    FirstName   VARCHAR(50)   NOT NULL,\n    LastName    VARCHAR(50)   NOT NULL,\n    DateOfBirth DATE          NOT NULL,\n    Gender      VARCHAR(10)   NOT NULL\n);\nGO\n\nIF OBJECT_ID('bronze1.usp_merge_patient', 'P') IS NOT NULL\n    DROP PROCEDURE bronze1.usp_merge_patient;\nGO\n\nCREATE PROCEDURE bronze1.usp_merge_patient\nAS\nBEGIN\n    SET NOCOUNT ON;\n\n    UPDATE tgt\n    SET\n        tgt.FirstName   = src.FirstName,\n        tgt.LastName    = src.LastName,\n        tgt.DateOfBirth = src.DateOfBirth,\n        tgt.Gender      = src.Gender\n    FROM bronze1.Patient AS tgt\n    INNER JOIN bronze1.staging_Patient AS src\n        ON tgt.PatientID = src.PatientID;\n\n    INSERT INTO bronze1.Patient\n    (\n        PatientID,\n        FirstName,\n        LastName,\n        DateOfBirth,\n        Gender\n    )\n    SELECT\n        src.PatientID,\n        src.FirstName,\n        src.LastName,\n        src.DateOfBirth,\n        src.Gender\n    FROM bronze1.staging_Patient AS src\n    LEFT JOIN bronze1.Patient AS tgt\n        ON tgt.PatientID = src.PatientID\n    WHERE tgt.PatientID IS NULL;\n\n    TRUNCATE TABLE bronze1.staging_Patient;\nEND;\nGO\n\n\nSELECT * FROM dbo.Watermark;\nSELECT * FROM bronze1.Patient;\nSELECT * FROM bronze1.staging_Patient;",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "dsqlp_dev02",
+						"poolName": "dsqlp_dev02"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
+			},
+			"dependsOn": []
+		},
+		{
 			"name": "[concat(parameters('workspaceName'), '/SQL script 1')]",
 			"type": "Microsoft.Synapse/workspaces/sqlscripts",
 			"apiVersion": "2019-06-01-preview",
 			"properties": {
 				"content": {
-					"query": "SELECT COUNT(*) AS cnt FROM bronze.customers;\nSELECT COUNT(*) AS cnt FROM bronze.orders;\nSELECT COUNT(*) AS cnt FROM bronze.products;\n\nSELECT TOP 10 * FROM bronze.customers;\nSELECT TOP 10 * FROM bronze.orders;\nSELECT TOP 10 * FROM bronze.products;\n\nSELECT SCHEMA_NAME(schema_id) AS schema_name, name\nFROM sys.tables\nWHERE name IN ('orders', 'customers', 'products');\n\nSELECT 'customers' AS table_name, COUNT(*) AS row_count FROM silver.customers\nUNION ALL\nSELECT 'orders', COUNT(*) FROM silver.orders\nUNION ALL\nSELECT 'products', COUNT(*) FROM silver.products;\n\nSELECT TOP 10 * FROM silver.customers;\nSELECT TOP 10 * FROM silver.orders;\nSELECT TOP 10 * FROM silver.products;\n\nSELECT 'bronze.customers' AS table_name, COUNT(*) AS row_count FROM bronze.customers\nUNION ALL\nSELECT 'silver.customers', COUNT(*) FROM silver.customers\nUNION ALL\nSELECT 'bronze.orders', COUNT(*) FROM bronze.orders\nUNION ALL\nSELECT 'silver.orders', COUNT(*) FROM silver.orders\nUNION ALL\nSELECT 'bronze.products', COUNT(*) FROM bronze.products\nUNION ALL\nSELECT 'silver.products', COUNT(*) FROM silver.products;\n\nSELECT * FROM silver.patients_inc;",
+					"query": "SELECT COUNT(*) AS cnt FROM bronze.customers;\nSELECT COUNT(*) AS cnt FROM bronze.orders;\nSELECT COUNT(*) AS cnt FROM bronze.products;\n\nSELECT TOP 10 * FROM bronze.customers;\nSELECT TOP 10 * FROM bronze.orders;\nSELECT TOP 10 * FROM bronze.products;\n\nSELECT SCHEMA_NAME(schema_id) AS schema_name, name\nFROM sys.tables\nWHERE name IN ('orders', 'customers', 'products');\n\nSELECT 'customers' AS table_name, COUNT(*) AS row_count FROM silver.customers\nUNION ALL\nSELECT 'orders', COUNT(*) FROM silver.orders\nUNION ALL\nSELECT 'products', COUNT(*) FROM silver.products;\n\nSELECT TOP 10 * FROM silver.customers;\nSELECT TOP 10 * FROM silver.orders;\nSELECT TOP 10 * FROM silver.products;\n\nSELECT 'bronze.customers' AS table_name, COUNT(*) AS row_count FROM bronze.customers\nUNION ALL\nSELECT 'silver.customers', COUNT(*) FROM silver.customers\nUNION ALL\nSELECT 'bronze.orders', COUNT(*) FROM bronze.orders\nUNION ALL\nSELECT 'silver.orders', COUNT(*) FROM silver.orders\nUNION ALL\nSELECT 'bronze.products', COUNT(*) FROM bronze.products\nUNION ALL\nSELECT 'silver.products', COUNT(*) FROM silver.products;\n\nSELECT * FROM silver.patients_inc;\n\n\n",
 					"metadata": {
 						"language": "sql"
 					},
@@ -2991,91 +3345,6 @@
 			},
 			"dependsOn": [],
 			"location": "centralus"
-		},
-		{
-			"name": "[concat(parameters('workspaceName'), '/LS_sqldb')]",
-			"type": "Microsoft.Synapse/workspaces/linkedServices",
-			"apiVersion": "2019-06-01-preview",
-			"properties": {
-				"annotations": [],
-				"type": "AzureSqlDatabase",
-				"typeProperties": {
-					"server": "[parameters('LS_sqldb_properties_typeProperties_server')]",
-					"database": "[parameters('LS_sqldb_properties_typeProperties_database')]",
-					"encrypt": "mandatory",
-					"trustServerCertificate": false,
-					"authenticationType": "SQL",
-					"userName": "[parameters('LS_sqldb_properties_typeProperties_userName')]",
-					"password": {
-						"type": "SecureString",
-						"value": "[parameters('LS_sqldb_password')]"
-					}
-				},
-				"connectVia": {
-					"referenceName": "AutoResolveIntegrationRuntime",
-					"type": "IntegrationRuntimeReference"
-				}
-			},
-			"dependsOn": [
-				"[concat(variables('workspaceId'), '/integrationRuntimes/AutoResolveIntegrationRuntime')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('workspaceName'), '/DS_sqldb')]",
-			"type": "Microsoft.Synapse/workspaces/datasets",
-			"apiVersion": "2019-06-01-preview",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "LS_sqldb",
-					"type": "LinkedServiceReference"
-				},
-				"parameters": {
-					"schemaname": {
-						"type": "string"
-					},
-					"tablename": {
-						"type": "string"
-					}
-				},
-				"annotations": [],
-				"type": "AzureSqlTable",
-				"schema": [
-					{
-						"name": "PatientID",
-						"type": "int",
-						"precision": 10
-					},
-					{
-						"name": "FirstName",
-						"type": "varchar"
-					},
-					{
-						"name": "LastName",
-						"type": "varchar"
-					},
-					{
-						"name": "DateOfBirth",
-						"type": "date"
-					},
-					{
-						"name": "Gender",
-						"type": "varchar"
-					}
-				],
-				"typeProperties": {
-					"schema": {
-						"value": "@dataset().schemaname",
-						"type": "Expression"
-					},
-					"table": {
-						"value": "@dataset().tablename",
-						"type": "Expression"
-					}
-				}
-			},
-			"dependsOn": [
-				"[concat(variables('workspaceId'), '/linkedServices/LS_sqldb')]"
-			]
 		}
 	]
 }
