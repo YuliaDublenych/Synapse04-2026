@@ -1,0 +1,295 @@
+IF OBJECT_ID('dbo.Patient', 'U') IS NOT NULL
+    DROP TABLE dbo.Patient;
+GO
+
+CREATE TABLE dbo.Patient
+(
+    PatientID   INT         NOT NULL PRIMARY KEY,
+    FirstName   VARCHAR(50) NOT NULL,
+    LastName    VARCHAR(50) NOT NULL,
+    DateOfBirth DATE        NOT NULL,
+    Gender      VARCHAR(10) NOT NULL
+);
+GO
+
+INSERT INTO dbo.Patient (PatientID, FirstName, LastName, DateOfBirth, Gender)
+VALUES
+(1, 'John',   'Smith',   '1985-03-15', 'Male'),
+(2, 'Emma',   'Johnson', '1992-07-22', 'Female'),
+(3, 'Liam',   'Brown',   '1978-11-08', 'Male'),
+(4, 'Olivia', 'Davis',   '2001-01-19', 'Female'),
+(5, 'Noah',   'Wilson',  '1990-09-30', 'Male'),
+(6, 'Ava',    'Taylor',  '1988-05-14', 'Female');
+GO
+
+
+SELECT
+    s.name  AS SchemaName,
+    t.name  AS TableName,
+    t.is_tracked_by_cdc
+FROM sys.tables t
+JOIN sys.schemas s
+    ON t.schema_id = s.schema_id
+WHERE s.name = 'dbo'
+  AND t.name = 'Patient';
+GO
+
+SELECT *
+FROM cdc.change_tables;
+GO
+
+IF OBJECT_ID('dbo.CdcCheckpoint', 'U') IS NOT NULL
+    DROP TABLE dbo.CdcCheckpoint;
+GO
+
+CREATE TABLE dbo.CdcCheckpoint
+(
+    TableName         VARCHAR(200)  NOT NULL,
+    CaptureInstance   VARCHAR(200)  NOT NULL,
+    LastProcessedLSN  VARBINARY(10) NULL,
+    LastRunId         VARCHAR(100)  NULL,
+    LastUpdatedAtUtc  DATETIME2     NULL
+);
+GO
+
+INSERT INTO dbo.CdcCheckpoint
+(
+    TableName,
+    CaptureInstance,
+    LastProcessedLSN,
+    LastRunId,
+    LastUpdatedAtUtc
+)
+VALUES
+(
+    'dbo.Patient',
+    'dbo_Patient',
+    NULL,
+    NULL,
+    NULL
+);
+GO
+
+
+-- test changes
+UPDATE dbo.Patient
+SET LastName = 'Brown-Updated'
+WHERE PatientID = 3;
+GO
+
+DELETE FROM dbo.Patient
+WHERE PatientID = 6;
+GO
+
+INSERT INTO dbo.Patient (PatientID, FirstName, LastName, DateOfBirth, Gender)
+VALUES (7, 'Mia', 'Walker', '1995-12-01', 'Female');
+GO
+
+--CDC output check
+DECLARE @from_lsn VARBINARY(10),
+        @to_lsn   VARBINARY(10);
+
+SET @from_lsn = sys.fn_cdc_get_min_lsn('dbo_Patient');
+SET @to_lsn   = sys.fn_cdc_get_max_lsn();
+
+SELECT *
+FROM cdc.fn_cdc_get_all_changes_dbo_Patient(@from_lsn, @to_lsn, 'all update old')
+ORDER BY __$start_lsn, __$seqval;
+GO
+
+
+--enable cdc on db and table level
+
+EXEC sys.sp_cdc_enable_db;
+GO
+
+EXEC sys.sp_cdc_enable_table
+    @source_schema = N'dbo',
+    @source_name   = N'Patient',
+    @role_name     = NULL,
+    @supports_net_changes = 1;
+GO
+
+--checking 
+SELECT
+    s.name AS SchemaName,
+    t.name AS TableName,
+    t.is_tracked_by_cdc
+FROM sys.tables t
+JOIN sys.schemas s
+    ON t.schema_id = s.schema_id
+WHERE s.name = 'dbo'
+  AND t.name = 'Patient';
+GO
+
+SELECT *
+FROM cdc.change_tables;
+GO
+
+UPDATE dbo.CdcCheckpoint
+SET
+    LastProcessedLSN = sys.fn_cdc_get_max_lsn(),
+    LastRunId = 'baseline_load',
+    LastUpdatedAtUtc = SYSUTCDATETIME()
+WHERE TableName = 'dbo.Patient';
+
+UPDATE dbo.Patient
+SET LastName = 'Black-Updated'
+WHERE PatientID = 1;
+
+DELETE FROM dbo.Patient
+WHERE PatientID = 3;
+
+INSERT INTO dbo.Patient (PatientID, FirstName, LastName, DateOfBirth, Gender)
+VALUES (9, 'Yeva', 'Walker', '1999-12-01', 'Female');
+
+DECLARE @from_lsn VARBINARY(10),
+        @to_lsn   VARBINARY(10);
+
+SELECT @from_lsn = LastProcessedLSN
+FROM dbo.CdcCheckpoint
+WHERE TableName = 'dbo.Patient';
+
+SET @to_lsn = sys.fn_cdc_get_max_lsn();
+
+SELECT
+    __$start_lsn,
+    __$seqval,
+    __$operation,
+    __$update_mask,
+    PatientID,
+    FirstName,
+    LastName,
+    DateOfBirth,
+    Gender
+FROM cdc.fn_cdc_get_all_changes_dbo_Patient(@from_lsn, @to_lsn, 'all')
+ORDER BY __$start_lsn, __$seqval;
+
+UPDATE dbo.CdcCheckpoint
+SET
+    LastProcessedLSN = sys.fn_cdc_get_max_lsn(),
+    LastRunId = 'test_run_1',
+    LastUpdatedAtUtc = SYSUTCDATETIME()
+WHERE TableName = 'dbo.Patient';
+
+SELECT *
+FROM dbo.CdcCheckpoint
+WHERE TableName = 'dbo.Patient';
+
+DECLARE @from_lsn VARBINARY(10),
+        @to_lsn   VARBINARY(10);
+
+SELECT @from_lsn = LastProcessedLSN
+FROM dbo.CdcCheckpoint
+WHERE TableName = 'dbo.Patient';
+
+SET @to_lsn = sys.fn_cdc_get_max_lsn();
+
+SELECT
+    @from_lsn AS from_lsn,
+    @to_lsn   AS to_lsn;
+
+SELECT
+    __$start_lsn,
+    __$seqval,
+    __$operation,
+    __$update_mask,
+    PatientID,
+    FirstName,
+    LastName,
+    DateOfBirth,
+    Gender
+FROM cdc.fn_cdc_get_all_changes_dbo_Patient(@from_lsn, @to_lsn, 'all')
+ORDER BY __$start_lsn, __$seqval;
+
+UPDATE dbo.CdcCheckpoint
+SET LastProcessedLSN = sys.fn_cdc_get_max_lsn()
+WHERE TableName = 'dbo.Patient';
+
+UPDATE dbo.Patient
+SET LastName = 'Smith-New'
+WHERE PatientID = 1;
+
+DELETE FROM dbo.Patient
+WHERE PatientID = 3;
+
+INSERT INTO dbo.Patient (PatientID, FirstName, LastName, DateOfBirth, Gender)
+VALUES (10, 'Test', 'User', '2000-01-01', 'Male');
+
+UPDATE dbo.CdcCheckpoint
+SET LastProcessedLSN = NULL
+WHERE TableName = 'dbo.Patient';
+
+SELECT
+    __$start_lsn,
+    __$seqval,
+    __$operation,
+    __$update_mask,
+    PatientID,
+    FirstName,
+    LastName,
+    DateOfBirth,
+    Gender
+FROM cdc.fn_cdc_get_all_changes_dbo_Patient
+(
+    sys.fn_cdc_get_min_lsn('dbo_Patient'),
+    sys.fn_cdc_get_max_lsn(),
+    'all'
+)
+ORDER BY __$start_lsn, __$seqval;
+
+UPDATE dbo.CdcCheckpoint
+SET LastProcessedLSN = sys.fn_cdc_get_max_lsn()
+WHERE TableName = 'dbo.Patient';
+
+UPDATE dbo.Patient
+SET LastName = 'Test-Updated'
+WHERE PatientID = 1;
+
+INSERT INTO dbo.Patient (PatientID, FirstName, LastName, DateOfBirth, Gender)
+VALUES (10, 'Anna', 'Test', '1998-06-01', 'Female');
+
+UPDATE dbo.CdcCheckpoint
+SET
+    LastProcessedLSN = sys.fn_cdc_get_max_lsn(),
+    LastRunId = 'baseline',
+    LastUpdatedAtUtc = SYSUTCDATETIME()
+WHERE TableName = 'dbo.Patient';
+
+UPDATE dbo.Patient
+SET LastName = 'Test-Updated'
+WHERE PatientID = 1;
+
+DELETE FROM dbo.Patient
+WHERE PatientID = 2;
+
+INSERT INTO dbo.Patient (PatientID, FirstName, LastName, DateOfBirth, Gender)
+VALUES (10, 'Anna', 'Stone', '1998-06-01', 'Female');
+
+UPDATE dbo.Patient
+SET LastName = 'Test-Updated'
+WHERE PatientID = 1;
+
+INSERT INTO dbo.Patient (PatientID, FirstName, LastName, DateOfBirth, Gender)
+VALUES (11, 'Hanna', 'St', '1998-06-01', 'Female');
+
+SELECT *
+FROM dbo.Patient
+ORDER BY PatientID;
+
+SELECT
+    __$start_lsn,
+    __$seqval,
+    __$operation,
+    __$update_mask,
+    PatientID,
+    FirstName,
+    LastName,
+    DateOfBirth,
+    Gender
+FROM cdc.fn_cdc_get_all_changes_dbo_Patient
+(
+    sys.fn_cdc_get_min_lsn('dbo_Patient'),
+    sys.fn_cdc_get_max_lsn(),
+    'all'
+);
