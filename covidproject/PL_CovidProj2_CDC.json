@@ -1,0 +1,320 @@
+{
+	"name": "PL_CovidProj2_CDC",
+	"properties": {
+		"activities": [
+			{
+				"name": "Copy CDC rows",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Lookup_ToLSN",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "SELECT\n    c.__$start_lsn,\n    c.__$seqval,\n    c.__$operation,\n    c.__$update_mask,\n    c.PatientID,\n    c.FirstName,\n    c.LastName,\n    c.DateOfBirth,\n    c.Gender\nFROM cdc.fn_cdc_get_all_changes_dbo_Patient\n(\n    CONVERT(VARBINARY(10), '@{activity('Lookup_FromLSN').output.firstRow.FromLSN}', 1),\n    CONVERT(VARBINARY(10), '@{activity('Lookup_ToLSN').output.firstRow.ToLSN}', 1),\n    'all'\n) AS c",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "SqlDWSink",
+						"preCopyScript": "TRUNCATE TABLE bronze1.staging_Patient_CDC;",
+						"writeBehavior": "Insert",
+						"sqlWriterUseTableLock": false,
+						"disableMetricsCollection": false
+					},
+					"enableStaging": true,
+					"stagingSettings": {
+						"linkedServiceName": {
+							"referenceName": "ls_adls_source",
+							"type": "LinkedServiceReference"
+						},
+						"path": "staging"
+					},
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "__$start_lsn",
+									"type": "Byte[]",
+									"physicalType": "binary"
+								},
+								"sink": {
+									"name": "__$start_lsn",
+									"type": "Byte[]",
+									"physicalType": "varbinary"
+								}
+							},
+							{
+								"source": {
+									"name": "__$seqval",
+									"type": "Byte[]",
+									"physicalType": "binary"
+								},
+								"sink": {
+									"name": "__$seqval",
+									"type": "Byte[]",
+									"physicalType": "varbinary"
+								}
+							},
+							{
+								"source": {
+									"name": "__$operation",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "__$operation",
+									"type": "Int32",
+									"physicalType": "int"
+								}
+							},
+							{
+								"source": {
+									"name": "__$update_mask",
+									"type": "Byte[]",
+									"physicalType": "varbinary"
+								},
+								"sink": {
+									"name": "__$update_mask",
+									"type": "Byte[]",
+									"physicalType": "varbinary"
+								}
+							},
+							{
+								"source": {
+									"name": "PatientID",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "PatientID",
+									"type": "Int32",
+									"physicalType": "int"
+								}
+							},
+							{
+								"source": {
+									"name": "FirstName",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "FirstName",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "LastName",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "LastName",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "DateOfBirth",
+									"type": "Date",
+									"physicalType": "date"
+								},
+								"sink": {
+									"name": "DateOfBirth",
+									"type": "Date",
+									"physicalType": "date"
+								}
+							},
+							{
+								"source": {
+									"name": "Gender",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "Gender",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "DS_sqldb",
+						"type": "DatasetReference",
+						"parameters": {
+							"schemaname": "dbo",
+							"tablename": "Patient"
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "DS_DedSQLpool_Table_Param",
+						"type": "DatasetReference",
+						"parameters": {
+							"pSchema": "bronze1",
+							"pTable": "staging_Patient_CDC"
+						}
+					}
+				]
+			},
+			{
+				"name": "sp_bronze1usp_merge_patient",
+				"type": "SqlPoolStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "Copy CDC rows",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"sqlPool": {
+					"referenceName": "dsqlp_dev02",
+					"type": "SqlPoolReference"
+				},
+				"typeProperties": {
+					"storedProcedureName": "[bronze1].[usp_apply_patient_cdc]"
+				}
+			},
+			{
+				"name": "update checkpoint",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "sp_bronze1usp_merge_patient",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "LS_sqldb",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "Query",
+							"text": "UPDATE dbo.CdcCheckpoint\nSET\n    LastProcessedLSN = CONVERT(VARBINARY(10), '@{activity('Lookup_ToLSN').output.firstRow.ToLSN}', 1),\n    LastRunId = '@{pipeline().RunId}',\n    LastUpdatedAtUtc = SYSUTCDATETIME()\nWHERE TableName = 'dbo.Patient';"
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Lookup_FromLSN",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "SELECT CONVERT\n(\n    VARCHAR(34),\n    ISNULL\n    (\n        (\n            SELECT TOP 1 sys.fn_cdc_increment_lsn(LastProcessedLSN)\n            FROM dbo.CdcCheckpoint\n            WHERE TableName = 'dbo.Patient'\n        ),\n        sys.fn_cdc_get_min_lsn('dbo_Patient')\n    ),\n    1\n) AS FromLSN;",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "DS_sqldb",
+						"type": "DatasetReference",
+						"parameters": {
+							"schemaname": "dbo",
+							"tablename": "Patient"
+						}
+					}
+				}
+			},
+			{
+				"name": "Lookup_ToLSN",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "Lookup_FromLSN",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "SELECT CONVERT(VARCHAR(34), sys.fn_cdc_get_max_lsn(), 1) AS ToLSN;",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "DS_sqldb",
+						"type": "DatasetReference",
+						"parameters": {
+							"schemaname": "dbo",
+							"tablename": "Patient"
+						}
+					}
+				}
+			}
+		],
+		"folder": {
+			"name": "CovidProj"
+		},
+		"annotations": []
+	}
+}
