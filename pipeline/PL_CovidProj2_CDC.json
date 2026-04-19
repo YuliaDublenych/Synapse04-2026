@@ -7,7 +7,7 @@
 				"type": "Copy",
 				"dependsOn": [
 					{
-						"activity": "Lookup ToLSN",
+						"activity": "Lookup_ToLSN",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -24,7 +24,10 @@
 				"typeProperties": {
 					"source": {
 						"type": "AzureSqlSource",
-						"sqlReaderQuery": "SELECT\n    c.__$start_lsn,\n    c.__$seqval,\n    c.__$operation,\n    c.__$update_mask,\n    c.PatientID,\n    c.FirstName,\n    c.LastName,\n    c.DateOfBirth,\n    c.Gender\nFROM cdc.fn_cdc_get_all_changes_dbo_Patient\n(\n    CONVERT(VARBINARY(10), '@{activity('Lookup_FromLSN').output.firstRow.FromLSN}', 1),\n    CONVERT(VARBINARY(10), '@{activity('Lookup_ToLSN').output.firstRow.ToLSN}', 1),\n    'all'\n) AS c",
+						"sqlReaderQuery": {
+							"value": "SELECT\n    c.__$start_lsn,\n    c.__$seqval,\n    c.__$operation,\n    c.__$update_mask,\n    c.PatientID,\n    c.FirstName,\n    c.LastName,\n    c.DateOfBirth,\n    c.Gender\nFROM cdc.fn_cdc_get_all_changes_dbo_Patient\n(\n    CONVERT(VARBINARY(10), '@{activity('Lookup_FromLSN').output.firstRow.FromLSN}', 1),\n    CONVERT(VARBINARY(10), '@{activity('Lookup_ToLSN').output.firstRow.ToLSN}', 1),\n    'all'\n) AS c",
+							"type": "Expression"
+						},
 						"queryTimeout": "02:00:00",
 						"partitionOption": "None"
 					},
@@ -237,14 +240,14 @@
 					"scripts": [
 						{
 							"type": "Query",
-							"text": "IF EXISTS (SELECT 1 FROM dbo.CdcCheckpoint WHERE TableName = 'dbo.Patient')\nBEGIN\n    UPDATE dbo.CdcCheckpoint\n    SET\n        LastProcessedLSN = sys.fn_cdc_get_max_lsn(),\n        LastRunId        = 'manual_run',\n        LastUpdatedAtUtc = SYSUTCDATETIME()\n    WHERE TableName = 'dbo.Patient';\nEND\nELSE\nBEGIN\n    INSERT INTO dbo.CdcCheckpoint\n    (\n        TableName,\n        CaptureInstance,\n        LastProcessedLSN,\n        LastRunId,\n        LastUpdatedAtUtc\n    )\n    VALUES\n    (\n        'dbo.Patient',\n        'dbo_Patient',\n        sys.fn_cdc_get_max_lsn(),\n        'manual_run',\n        SYSUTCDATETIME()\n    );\nEND"
+							"text": "UPDATE dbo.CdcCheckpoint\nSET\n    LastProcessedLSN = CONVERT(VARBINARY(10), '@{activity('Lookup_ToLSN').output.firstRow.ToLSN}', 1),\n    LastRunId = '@{pipeline().RunId}',\n    LastUpdatedAtUtc = SYSUTCDATETIME()\nWHERE TableName = 'dbo.Patient';"
 						}
 					],
 					"scriptBlockExecutionTimeout": "02:00:00"
 				}
 			},
 			{
-				"name": "Lookup FromLSN",
+				"name": "Lookup_FromLSN",
 				"type": "Lookup",
 				"dependsOn": [],
 				"policy": {
@@ -273,11 +276,11 @@
 				}
 			},
 			{
-				"name": "Lookup ToLSN",
+				"name": "Lookup_ToLSN",
 				"type": "Lookup",
 				"dependsOn": [
 					{
-						"activity": "Lookup FromLSN",
+						"activity": "Lookup_FromLSN",
 						"dependencyConditions": [
 							"Succeeded"
 						]
