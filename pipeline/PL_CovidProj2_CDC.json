@@ -5,7 +5,14 @@
 			{
 				"name": "Copy CDC rows",
 				"type": "Copy",
-				"dependsOn": [],
+				"dependsOn": [
+					{
+						"activity": "Lookup ToLSN",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
 				"policy": {
 					"timeout": "0.12:00:00",
 					"retry": 0,
@@ -17,7 +24,7 @@
 				"typeProperties": {
 					"source": {
 						"type": "AzureSqlSource",
-						"sqlReaderQuery": "SELECT\n    c.__$start_lsn,\n    c.__$seqval,\n    c.__$operation,\n    c.__$update_mask,\n    c.PatientID,\n    c.FirstName,\n    c.LastName,\n    c.DateOfBirth,\n    c.Gender\nFROM cdc.fn_cdc_get_all_changes_dbo_Patient\n(\n    COALESCE\n    (\n        sys.fn_cdc_increment_lsn\n        (\n            (SELECT LastProcessedLSN\n             FROM dbo.CdcCheckpoint\n             WHERE TableName = 'dbo.Patient')\n        ),\n        sys.fn_cdc_get_min_lsn('dbo_Patient')\n    ),\n    sys.fn_cdc_get_max_lsn(),\n    'all'\n) AS c\nORDER BY c.__$start_lsn, c.__$seqval;",
+						"sqlReaderQuery": "SELECT\n    c.__$start_lsn,\n    c.__$seqval,\n    c.__$operation,\n    c.__$update_mask,\n    c.PatientID,\n    c.FirstName,\n    c.LastName,\n    c.DateOfBirth,\n    c.Gender\nFROM cdc.fn_cdc_get_all_changes_dbo_Patient\n(\n    CONVERT(VARBINARY(10), '@{activity('Lookup_FromLSN').output.firstRow.FromLSN}', 1),\n    CONVERT(VARBINARY(10), '@{activity('Lookup_ToLSN').output.firstRow.ToLSN}', 1),\n    'all'\n) AS c",
 						"queryTimeout": "02:00:00",
 						"partitionOption": "None"
 					},
@@ -234,6 +241,71 @@
 						}
 					],
 					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Lookup FromLSN",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "SELECT CONVERT\n(\n    VARCHAR(34),\n    ISNULL\n    (\n        (\n            SELECT TOP 1 sys.fn_cdc_increment_lsn(LastProcessedLSN)\n            FROM dbo.CdcCheckpoint\n            WHERE TableName = 'dbo.Patient'\n        ),\n        sys.fn_cdc_get_min_lsn('dbo_Patient')\n    ),\n    1\n) AS FromLSN;",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "DS_sqldb",
+						"type": "DatasetReference",
+						"parameters": {
+							"schemaname": "dbo",
+							"tablename": "Patient"
+						}
+					}
+				}
+			},
+			{
+				"name": "Lookup ToLSN",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "Lookup FromLSN",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "SELECT CONVERT(VARCHAR(34), sys.fn_cdc_get_max_lsn(), 1) AS ToLSN;",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "DS_sqldb",
+						"type": "DatasetReference",
+						"parameters": {
+							"schemaname": "dbo",
+							"tablename": "Patient"
+						}
+					}
 				}
 			}
 		],
