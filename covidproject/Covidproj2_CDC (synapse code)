@@ -1,0 +1,184 @@
+/* =========================================================
+   1. Create schema
+   ========================================================= */
+IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'bronze1')
+BEGIN
+    EXEC ('CREATE SCHEMA bronze1');
+END;
+GO
+
+/* =========================================================
+   2. Drop old objects
+   ========================================================= */
+IF OBJECT_ID('bronze1.staging_Patient_CDC', 'U') IS NOT NULL
+    DROP TABLE bronze1.staging_Patient_CDC;
+GO
+
+IF OBJECT_ID('bronze1.Patient', 'U') IS NOT NULL
+    DROP TABLE bronze1.Patient;
+GO
+
+IF OBJECT_ID('bronze1.usp_apply_patient_cdc', 'P') IS NOT NULL
+    DROP PROCEDURE bronze1.usp_apply_patient_cdc;
+GO
+
+/* =========================================================
+   3. Create CDC staging table
+   This table receives rows from Azure SQL CDC query
+   ========================================================= */
+CREATE TABLE bronze1.staging_Patient_CDC
+(
+    __$start_lsn   VARBINARY(10)  NULL,
+    __$seqval      VARBINARY(10)  NULL,
+    __$operation   INT            NULL,
+    __$update_mask VARBINARY(128) NULL,
+
+    PatientID      INT            NOT NULL,
+    FirstName      VARCHAR(50)    NOT NULL,
+    LastName       VARCHAR(50)    NOT NULL,
+    DateOfBirth    DATE           NOT NULL,
+    Gender         VARCHAR(10)    NOT NULL
+)
+WITH
+(
+    DISTRIBUTION = ROUND_ROBIN,
+    HEAP
+);
+GO
+
+/* =========================================================
+   4. Create target Bronze table
+   ========================================================= */
+CREATE TABLE bronze1.Patient
+(
+    PatientID      INT            NOT NULL,
+    FirstName      VARCHAR(50)    NOT NULL,
+    LastName       VARCHAR(50)    NOT NULL,
+    DateOfBirth    DATE           NOT NULL,
+    Gender         VARCHAR(10)    NOT NULL
+)
+WITH
+(
+    DISTRIBUTION = ROUND_ROBIN,
+    HEAP
+);
+GO
+
+/* =========================================================
+   5. Create procedure to apply CDC changes
+   __$operation:
+   1 = delete
+   2 = insert
+   4 = update (new values)
+   We ignore 3 = update old values
+   ========================================================= */
+CREATE PROCEDURE bronze1.usp_apply_patient_cdc
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    /* -----------------------------------------
+       Step 1. Delete rows from target
+       ----------------------------------------- */
+    DELETE tgt
+    FROM bronze1.Patient AS tgt
+    INNER JOIN bronze1.staging_Patient_CDC AS src
+        ON tgt.PatientID = src.PatientID
+    WHERE src.__$operation = 1;
+
+    /* -----------------------------------------
+       Step 2. Take latest INSERT / UPDATE row
+       per PatientID from staging
+       ----------------------------------------- */
+    IF OBJECT_ID('tempdb..#LatestChanges') IS NOT NULL
+        DROP TABLE #LatestChanges;
+
+    CREATE TABLE #LatestChanges
+    WITH
+    (
+        DISTRIBUTION = ROUND_ROBIN,
+        HEAP
+    )
+    AS
+    SELECT
+        PatientID,
+        FirstName,
+        LastName,
+        DateOfBirth,
+        Gender,
+        __$operation,
+        __$start_lsn,
+        __$seqval
+    FROM
+    (
+        SELECT
+            src.PatientID,
+            src.FirstName,
+            src.LastName,
+            src.DateOfBirth,
+            src.Gender,
+            src.__$operation,
+            src.__$start_lsn,
+            src.__$seqval,
+            ROW_NUMBER() OVER
+            (
+                PARTITION BY src.PatientID
+                ORDER BY src.__$start_lsn DESC, src.__$seqval DESC
+            ) AS rn
+        FROM bronze1.staging_Patient_CDC AS src
+        WHERE src.__$operation IN (2, 4)
+    ) d
+    WHERE d.rn = 1;
+
+    /* -----------------------------------------
+       Step 3. Update existing rows
+       ----------------------------------------- */
+    UPDATE tgt
+    SET
+        tgt.FirstName   = src.FirstName,
+        tgt.LastName    = src.LastName,
+        tgt.DateOfBirth = src.DateOfBirth,
+        tgt.Gender      = src.Gender
+    FROM bronze1.Patient AS tgt
+    INNER JOIN #LatestChanges AS src
+        ON tgt.PatientID = src.PatientID;
+
+    /* -----------------------------------------
+       Step 4. Insert new rows
+       ----------------------------------------- */
+    INSERT INTO bronze1.Patient
+    (
+        PatientID,
+        FirstName,
+        LastName,
+        DateOfBirth,
+        Gender
+    )
+    SELECT
+        src.PatientID,
+        src.FirstName,
+        src.LastName,
+        src.DateOfBirth,
+        src.Gender
+    FROM #LatestChanges AS src
+    LEFT JOIN bronze1.Patient AS tgt
+        ON tgt.PatientID = src.PatientID
+    WHERE tgt.PatientID IS NULL;
+
+    /* -----------------------------------------
+       Step 5. Clear staging
+       ----------------------------------------- */
+    TRUNCATE TABLE bronze1.staging_Patient_CDC;
+END;
+GO
+
+--testing
+SELECT * 
+FROM bronze1.Patient
+ORDER BY PatientID;
+
+SELECT *
+FROM bronze1.staging_Patient_CDC
+ORDER BY PatientID;
+
+EXEC bronze1.usp_apply_patient_cdc;
