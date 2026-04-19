@@ -1,0 +1,245 @@
+{
+	"name": "PL_CovidProj2_CDC",
+	"properties": {
+		"activities": [
+			{
+				"name": "Copy CDC rows",
+				"type": "Copy",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "SELECT\n    c.__$start_lsn,\n    c.__$seqval,\n    c.__$operation,\n    c.__$update_mask,\n    c.PatientID,\n    c.FirstName,\n    c.LastName,\n    c.DateOfBirth,\n    c.Gender\nFROM cdc.fn_cdc_get_all_changes_dbo_Patient\n(\n    COALESCE\n    (\n        sys.fn_cdc_increment_lsn\n        (\n            (SELECT LastProcessedLSN\n             FROM dbo.CdcCheckpoint\n             WHERE TableName = 'dbo.Patient')\n        ),\n        sys.fn_cdc_get_min_lsn('dbo_Patient')\n    ),\n    sys.fn_cdc_get_max_lsn(),\n    'all'\n) AS c\nORDER BY c.__$start_lsn, c.__$seqval;",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "SqlDWSink",
+						"preCopyScript": "TRUNCATE TABLE bronze1.staging_Patient_CDC;",
+						"writeBehavior": "Insert",
+						"sqlWriterUseTableLock": false,
+						"disableMetricsCollection": false
+					},
+					"enableStaging": true,
+					"stagingSettings": {
+						"linkedServiceName": {
+							"referenceName": "ls_adls_source",
+							"type": "LinkedServiceReference"
+						},
+						"path": "staging"
+					},
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "__$start_lsn",
+									"type": "Byte[]",
+									"physicalType": "binary"
+								},
+								"sink": {
+									"name": "__$start_lsn",
+									"type": "Byte[]",
+									"physicalType": "varbinary"
+								}
+							},
+							{
+								"source": {
+									"name": "__$seqval",
+									"type": "Byte[]",
+									"physicalType": "binary"
+								},
+								"sink": {
+									"name": "__$seqval",
+									"type": "Byte[]",
+									"physicalType": "varbinary"
+								}
+							},
+							{
+								"source": {
+									"name": "__$operation",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "__$operation",
+									"type": "Int32",
+									"physicalType": "int"
+								}
+							},
+							{
+								"source": {
+									"name": "__$update_mask",
+									"type": "Byte[]",
+									"physicalType": "varbinary"
+								},
+								"sink": {
+									"name": "__$update_mask",
+									"type": "Byte[]",
+									"physicalType": "varbinary"
+								}
+							},
+							{
+								"source": {
+									"name": "PatientID",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "PatientID",
+									"type": "Int32",
+									"physicalType": "int"
+								}
+							},
+							{
+								"source": {
+									"name": "FirstName",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "FirstName",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "LastName",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "LastName",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "DateOfBirth",
+									"type": "Date",
+									"physicalType": "date"
+								},
+								"sink": {
+									"name": "DateOfBirth",
+									"type": "Date",
+									"physicalType": "date"
+								}
+							},
+							{
+								"source": {
+									"name": "Gender",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "Gender",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "DS_sqldb",
+						"type": "DatasetReference",
+						"parameters": {
+							"schemaname": "dbo",
+							"tablename": "Patient"
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "DS_DedSQLpool_Table_Param",
+						"type": "DatasetReference",
+						"parameters": {
+							"pSchema": "bronze1",
+							"pTable": "staging_Patient_CDC"
+						}
+					}
+				]
+			},
+			{
+				"name": "sp_bronze1usp_merge_patient",
+				"type": "SqlPoolStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "Copy CDC rows",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"sqlPool": {
+					"referenceName": "dsqlp_dev02",
+					"type": "SqlPoolReference"
+				},
+				"typeProperties": {
+					"storedProcedureName": "[bronze1].[usp_apply_patient_cdc]"
+				}
+			},
+			{
+				"name": "update checkpoint",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "sp_bronze1usp_merge_patient",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "LS_sqldb",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "Query",
+							"text": "IF EXISTS (SELECT 1 FROM dbo.CdcCheckpoint WHERE TableName = 'dbo.Patient')\nBEGIN\n    UPDATE dbo.CdcCheckpoint\n    SET\n        LastProcessedLSN = sys.fn_cdc_get_max_lsn(),\n        LastRunId        = 'manual_run',\n        LastUpdatedAtUtc = SYSUTCDATETIME()\n    WHERE TableName = 'dbo.Patient';\nEND\nELSE\nBEGIN\n    INSERT INTO dbo.CdcCheckpoint\n    (\n        TableName,\n        CaptureInstance,\n        LastProcessedLSN,\n        LastRunId,\n        LastUpdatedAtUtc\n    )\n    VALUES\n    (\n        'dbo.Patient',\n        'dbo_Patient',\n        sys.fn_cdc_get_max_lsn(),\n        'manual_run',\n        SYSUTCDATETIME()\n    );\nEND"
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			}
+		],
+		"folder": {
+			"name": "CovidProj"
+		},
+		"annotations": []
+	}
+}
